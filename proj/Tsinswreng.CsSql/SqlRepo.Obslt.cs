@@ -14,27 +14,7 @@ using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 
 public partial class SqlRepo<
 	TEntity, TId
->
-	:IRepo<TEntity, TId>
-	where TEntity: class, new()
-{
-
-	public ITblMgr TblMgr{get;set;}
-	public ISqlCmdMkr SqlCmdMkr{get;set;}
-	public IPropAccessorMgr PropAccessorMgr{get;set;}
-
-	public SqlRepo(
-		ITblMgr TblMgr
-		,ISqlCmdMkr SqlCmdMkr
-		,IPropAccessorMgr PropAccessorMgr
-	){
-		this.PropAccessorMgr = PropAccessorMgr;
-		this.TblMgr = TblMgr;
-		this.SqlCmdMkr = SqlCmdMkr;
-	}
-
-	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
-	
+>{
 	public async Task<Func<
 		CT
 		,Task<u64>

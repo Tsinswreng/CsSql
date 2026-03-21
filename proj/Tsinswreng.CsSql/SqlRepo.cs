@@ -10,6 +10,7 @@ using System.Collections;
 using System.Diagnostics;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
+using Tsinswreng.CsStrAcc;
 
 //using T = Bo_Word;
 //TODO 拆分ⁿ使更通用化
@@ -21,7 +22,23 @@ public partial class SqlRepo<
 	where TEntity: class, new()
 {
 
-	public Task<IAsyncEnumerable<TEntity?>> SlctManyInIdsWithDel(
+	public ITblMgr TblMgr{get;set;}
+	public ISqlCmdMkr SqlCmdMkr{get;set;}
+	public IPropAccessorMgr PropAccessorMgr{get;set;}
+
+	public SqlRepo(
+		ITblMgr TblMgr
+		,ISqlCmdMkr SqlCmdMkr
+		,IPropAccessorMgr PropAccessorMgr
+	){
+		this.PropAccessorMgr = PropAccessorMgr;
+		this.TblMgr = TblMgr;
+		this.SqlCmdMkr = SqlCmdMkr;
+	}
+
+	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
+	
+	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdsWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -87,7 +104,7 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 	}
 
 
-	public Task<IAsyncEnumerable<TEntity?>> BatSlctById(
+	public Task<IAsyncEnumerable<TEntity?>> BatGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -125,7 +142,19 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 		return Task.FromResult<IAsyncEnumerable<TEntity?>>(Run());
 	}
 
-	public async Task<IAsyncEnumerable<TAgg?>> BatSlctAggById<TAgg>(
+	public Task<IAsyncEnumerable<TEntity>> GetAll(
+		IDbFnCtx Ctx, CT Ct
+	){
+		throw new NotImplementedException();
+	}
+	
+	public Task<IAsyncEnumerable<TAgg>> GetAllAgg<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	){
+		throw new NotImplementedException();
+	}
+
+	public async Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)
@@ -148,7 +177,7 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 		u64 InBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
 
 		async Task<IList<TAgg?>> HandleOneBatch(IList<TId> OrderedBatchIds, CT Ct){
-			var rootsAsy = await SlctManyInIdsWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
+			var rootsAsy = await GetManyInIdsWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
 			var rootById = new Dictionary<object, TEntity>();
 			var rootIdSet = new HashSet<TId>();
 			await foreach(var root in rootsAsy.WithCancellation(Ct)){
@@ -297,7 +326,7 @@ Func<
 		return await fn(Tbl, FnMemb, Keys, Ct);
 	}
 
-	public async Task<IRespBatInsert> BatInsert(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IRespBatInsert> BatAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var Cols = T.Columns.Keys.ToList();
 		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
@@ -655,5 +684,15 @@ Func<
 		return new BatHardDel();
 	}
 
-	
+	public Task<IRespBatUpdAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+		throw new NotImplementedException();
+	}
+
+	public Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		throw new NotImplementedException();
+	}
+
+	public Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		throw new NotImplementedException();
+	}
 }

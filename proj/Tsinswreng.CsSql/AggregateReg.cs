@@ -232,7 +232,9 @@ public partial class AggIncludeReg<TPo, TKey>
 #Descr[An aggregate is a graph of related entities centered around a root entity. Example: A JnWord aggregate consists of: - Root: PoWord (the main entity) - Includes: PoWordProp and PoWordLearn (loaded separately and attached to the root) - Assembly: Creates a JnWord(root, props, learns) from the root and loaded related entities. The registration system works in 2 phases: 1. LOAD: Load root entities by their IDs, then load all related entities 2. ASSEMBLE: For each root, invoke FnAssemble with the root and a context containing pre-loaded related entities]
 """)]
 public partial interface IAggReg {
-	[Doc(@"#Sum[The aggregate type being registered e.g., typeof(JnWord)]")]
+	[Doc(@$"#Sum[The aggregate type being registered e.g., typeof(JnWord)].
+	suggest it implement {nameof(IAgg)}
+	")]
 	public Type AggType { get; }
 
 	[Doc(@"#Sum[The type of the root entity e.g., typeof(PoWord)]")]

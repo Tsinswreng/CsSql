@@ -4,73 +4,34 @@ namespace Tsinswreng.CsSql;
 using Tsinswreng.CsPage;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 
-
+[Doc(@$"
+naming rules:
+- Insert -> Add
+- Select -> Get
+- Update -> Upd
+- Delete -> Del
+")]
 public partial interface IRepo<TEntity, TId>{
 
 	[Doc(@$"using `Id IN (...)` Clause,
 	which would ignore unexisted Id and returned list may be unordered.
 	")]
-	public Task<IAsyncEnumerable<TEntity?>> SlctManyInIdsWithDel(
+	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdsWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 
 	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
-	public Task<IAsyncEnumerable<TEntity?>> BatSlctById(
+	public Task<IAsyncEnumerable<TEntity?>> BatGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 
-	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
-	public Task<IAsyncEnumerable<TAgg?>> BatSlctAggById<TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	)
-		where TAgg: class;
-
-
+	public Task<IAsyncEnumerable<TEntity>> GetAll(
+		IDbFnCtx Ctx, CT Ct
+	);
 	
-
-	
-	[Doc(@$"
-	assume you have MainEntity and AssetEntity, Each MainEntity Has Many AssetEntity,
-	when you want to selete multi MainEntity with their respective AssetEntity,
-	use this to avoid N+1 Query
-	#Params(
-		[],
-		[logical Forein Key],
-		[Options],
-		[All Keys. we use `IN` inside to avoid N+1 Query
-		null will be filtered off by code before being sent to db],
-		[main entity member selector],
-		[Table],
-		[],
-	)
-	#Rtn[Dict of Key map to multi OneToMany entitys]
-	")]
-	public Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
-		IDbFnCtx Ctx
-		,str CodeCol
-		,OptQry? OptQry
-		,IEnumerable<TKey?> Keys
-		,Func<TPo, TKey> FnMemb
-		,ITable Tbl
-		,CT Ct
-	)where TPo: new();
-
-
-	public Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
-		IDbFnCtx Ctx
-		,str CodeCol
-		,OptQry? OptQry
-		,IEnumerable<TKey> Keys
-		,Func<TPo, TKey> FnMemb
-		,ITable<TPo> Tbl //帶泛型
-		,CT Ct
-	)where TPo: new();
-	
-	
-	public Task<IRespBatInsert> BatInsert(
+	public Task<IRespBatInsert> BatAdd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
@@ -138,6 +99,78 @@ public partial interface IRepo<TEntity, TId>{
 	public Task<IHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
+	
+	#region Agg
+	
+	public Task<IRespBatUpdAgg> BatAddAgg<TAgg>(
+		IDbFnCtx Ctx
+		,IAsyncEnumerable<TAgg> NewAgg
+		,CT Ct
+	);
+	public Task<IAsyncEnumerable<TAgg>> GetAllAgg<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	);
+	
+	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
+	public Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)
+		where TAgg: class;
+	
+	
+	[Doc(@$"Hard Delete Both Root and its related assets")]
+	public Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
+	);
+	
+	
+	[Doc(@$"Soft Delete Both Root and its related assets,
+	if you only need to soft del the root, use {nameof(BatSoftDelById)} for the root
+	")]
+	public Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
+	);
+	
+	
+	[Doc(@$"
+	assume you have MainEntity and AssetEntity, Each MainEntity Has Many AssetEntity,
+	when you want to selete multi MainEntity with their respective AssetEntity,
+	use this to avoid N+1 Query
+	#Params(
+		[],
+		[logical Forein Key],
+		[Options],
+		[All Keys. we use `IN` inside to avoid N+1 Query
+		null will be filtered off by code before being sent to db],
+		[main entity member selector],
+		[Table],
+		[],
+	)
+	#Rtn[Dict of Key map to multi OneToMany entitys]
+	")]
+	public Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey?> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable Tbl
+		,CT Ct
+	)where TPo: new();
+
+
+	public Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable<TPo> Tbl //帶泛型
+		,CT Ct
+	)where TPo: new();
+	
+	#endregion Agg
 
 }
 
@@ -175,3 +208,16 @@ public class HardDelInId:IHardDelInId{}
 public class ISoftDelInId{}
 
 public class SoftDelInId:ISoftDelInId{}
+
+public class IRespBatAddAgg{}
+public class RespBatAddAgg:IRespBatAddAgg{}
+
+public class IRespBatUpdAgg{}
+public class RespBatUpdAgg:IRespBatUpdAgg{}
+
+
+public class IRespBatHardDelAgg{}
+public class RespBatHardDelAgg:IRespBatHardDelAgg{}
+
+public class IRespBatSoftDelAgg{}
+public class RespBatSoftDelAgg:IRespBatSoftDelAgg{}

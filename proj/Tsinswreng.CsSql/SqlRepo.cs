@@ -142,16 +142,108 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 		return Task.FromResult<IAsyncEnumerable<TEntity?>>(Run());
 	}
 
-	public Task<IAsyncEnumerable<TEntity>> GetAll(
+	public async Task<IAsyncEnumerable<TEntity>> GetAll(
 		IDbFnCtx Ctx, CT Ct
 	){
-		throw new NotImplementedException();
+		var sql =
+$"""
+SELECT * FROM {T.Qt(T.DbTblName)}
+WHERE 1=1
+{T.AndSqlIsNonDel()}
+""";
+		var cmd = await SqlCmdMkr.MkCmd(Ctx, sql, Ct);
+		Ctx.AddToDispose(cmd);
+		var rows = cmd
+			.AsyE1d(Ct)
+			.Select(x=>T.DbDictToEntity<TEntity>(x))
+		;
+		return rows;
 	}
 	
 	public Task<IAsyncEnumerable<TAgg>> GetAllAgg<TAgg>(
 		IDbFnCtx Ctx, CT Ct
 	){
-		throw new NotImplementedException();
+		var aggReg = TblMgr.GetAgg<TAgg>();
+		if(aggReg.RootEntityType != typeof(TEntity)){
+			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
+		}
+		if(aggReg.RootIdType != typeof(TId)){
+			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
+		}
+
+		u64 inBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
+
+		async Task<AggQryCtx> LoadAggQryCtx(IList<TId> rootIds, CT Ct){
+			var qryCtx = new AggQryCtx();
+			if(rootIds.Count == 0){
+				return qryCtx;
+			}
+
+			var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
+			foreach(var include in aggReg.Includes){
+				var slctByIn = await FnScltAllByColInVals<TId>(Ctx, include.Tbl, include.FKeyCodeCol, optQry, Ct);
+				var dbAsy = await slctByIn(rootIds, Ct);
+				await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
+					var codeDict = include.Tbl.ToCodeDict(dbDict);
+					var entity = include.FnNewEntityObj();
+					include.Tbl.AssignEntityByCodeDict(include.EntityType, entity, codeDict);
+					var keyObj = include.FnFKeyToRootIdObj(entity);
+					if(keyObj is null){
+						continue;
+					}
+					if(include.RelKind == EAggRelKind.OneToOne
+						&& qryCtx.GetOne(include.EntityType, keyObj) is not null
+					){
+						throw new Exception($"OneToOne include got duplicate rows. Agg={typeof(TAgg)}, Include={include.EntityType}, Key={keyObj}");
+					}
+					qryCtx.Add(include.EntityType, keyObj, entity);
+				}
+			}
+			return qryCtx;
+		}
+
+		async IAsyncEnumerable<TAgg> Run(){
+			var rootsAsy = await GetAll(Ctx, Ct);
+			var rootBatch = new List<TEntity>((i32)inBatchSize);
+			var idBatch = new List<TId>((i32)inBatchSize);
+
+			async IAsyncEnumerable<TAgg> FlushBatch(IList<TEntity> roots, IList<TId> ids){
+				var qryCtx = await LoadAggQryCtx(ids, Ct);
+				foreach(var root in roots){
+					var aggObj = aggReg.FnAssembleAggObj(root, qryCtx);
+					yield return (TAgg)aggObj;
+				}
+			}
+
+			await foreach(var root in rootsAsy.WithCancellation(Ct)){
+				var keyObj = aggReg.FnGetIdFromRootObj(root);
+				if(keyObj is null){
+					continue;
+				}
+				if(keyObj is not TId key){
+					throw new Exception($"Agg root key type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, Key={keyObj.GetType()}, ExpectedKey={typeof(TId)}");
+				}
+				rootBatch.Add(root);
+				idBatch.Add(key);
+				if((u64)rootBatch.Count < inBatchSize){
+					continue;
+				}
+
+				await foreach(var agg in FlushBatch(rootBatch, idBatch).WithCancellation(Ct)){
+					yield return agg;
+				}
+				rootBatch = new List<TEntity>((i32)inBatchSize);
+				idBatch = new List<TId>((i32)inBatchSize);
+			}
+
+			if(rootBatch.Count > 0){
+				await foreach(var agg in FlushBatch(rootBatch, idBatch).WithCancellation(Ct)){
+					yield return agg;
+				}
+			}
+		}
+
+		return Task.FromResult<IAsyncEnumerable<TAgg>>(Run());
 	}
 
 	public async Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
@@ -684,15 +776,295 @@ Func<
 		return new BatHardDel();
 	}
 
-	public Task<IRespBatUpdAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
-		throw new NotImplementedException();
+	public async Task<IRespBatUpdAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+		var aggReg = TblMgr.GetAgg<TAgg>();
+		if(aggReg.RootEntityType != typeof(TEntity)){
+			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
+		}
+		if(aggReg.RootIdType != typeof(TId)){
+			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
+		}
+		if(!PropAccessorMgr.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
+			throw new Exception($"No {nameof(IPropAccessor)} registered for aggregate type: {typeof(TAgg)}");
+		}
+
+		var includeTypeInclude = new Dictionary<Type, IAggIncludeReg>();
+		foreach(var include in aggReg.Includes){
+			if(includeTypeInclude.ContainsKey(include.EntityType)){
+				throw new Exception($"BatAddAgg requires unique include entity type. Agg={typeof(TAgg)}, IncludeType={include.EntityType}");
+			}
+			includeTypeInclude[include.EntityType] = include;
+		}
+
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+		var rootCols = T.Columns.Keys.ToList();
+		var rootCmdByCnt = new Dictionary<u64, ISqlCmd>();
+		var includeColsByType = new Dictionary<Type, IList<str>>();
+		var includeCmdByTypeCnt = new Dictionary<(Type, u64), ISqlCmd>();
+
+		str MkInsertSql(ITable tbl, IList<str> cols, u64 cnt){
+			var stmts = new List<str>((i32)cnt);
+			foreach(var i in Enumerable.Range(0, (i32)cnt)){
+				var idx = (u64)i;
+				var fields = str.Join(", ", cols.Select(x=>tbl.QtCol(x)));
+				var values = str.Join(", ", cols.Select(x=>tbl.NumFieldParam(x, idx).ToString()));
+				stmts.Add($"INSERT INTO {tbl.Qt(tbl.DbTblName)} ({fields}) VALUES ({values})");
+			}
+			return str.Join(";\n", stmts);
+		}
+
+		async Task<ISqlCmd> GetRootCmd(u64 cnt, CT Ct){
+			if(rootCmdByCnt.TryGetValue(cnt, out var got)){
+				return got;
+			}
+			var cmd = await SqlCmdMkr.Prepare(Ctx, MkInsertSql(T, rootCols, cnt), Ct);
+			Ctx.AddToDispose(cmd);
+			rootCmdByCnt[cnt] = cmd;
+			return cmd;
+		}
+
+		async Task<ISqlCmd> GetIncludeCmd(IAggIncludeReg include, u64 cnt, CT Ct){
+			var key = (include.EntityType, cnt);
+			if(includeCmdByTypeCnt.TryGetValue(key, out var got)){
+				return got;
+			}
+			if(!includeColsByType.TryGetValue(include.EntityType, out var cols)){
+				cols = include.Tbl.Columns.Keys.ToList();
+				includeColsByType[include.EntityType] = cols;
+			}
+			var cmd = await SqlCmdMkr.Prepare(Ctx, MkInsertSql(include.Tbl, cols, cnt), Ct);
+			Ctx.AddToDispose(cmd);
+			includeCmdByTypeCnt[key] = cmd;
+			return cmd;
+		}
+
+		async Task<nil> InsertRoots(IList<TEntity> roots, CT Ct){
+			if(roots.Count == 0){
+				return NIL;
+			}
+			var cnt = (u64)roots.Count;
+			var arg = new Dictionary<str, obj?>();
+			for(i32 i = 0; i < roots.Count; i++){
+				var ent = roots[i];
+				var dbDict = T.ToDbDict(T.EntityToCodeDict(ent, typeof(TEntity)));
+				foreach(var (k, v) in dbDict){
+					arg[T.NumFieldParam(k, (u64)i).Name] = v;
+				}
+			}
+			var cmd = await GetRootCmd(cnt, Ct);
+			await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			return NIL;
+		}
+
+		async Task<nil> InsertInclude(IAggIncludeReg include, IList<obj> ents, CT Ct){
+			if(ents.Count == 0){
+				return NIL;
+			}
+			if(!includeColsByType.TryGetValue(include.EntityType, out var cols)){
+				cols = include.Tbl.Columns.Keys.ToList();
+				includeColsByType[include.EntityType] = cols;
+			}
+
+			var cnt = (u64)ents.Count;
+			var arg = new Dictionary<str, obj?>();
+			for(i32 i = 0; i < ents.Count; i++){
+				var ent = ents[i];
+				var dbDict = include.Tbl.ToDbDict(include.Tbl.EntityToCodeDict(ent, include.EntityType));
+				foreach(var (k, v) in dbDict){
+					arg[include.Tbl.NumFieldParam(k, (u64)i).Name] = v;
+				}
+			}
+			var cmd = await GetIncludeCmd(include, cnt, Ct);
+			await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			return NIL;
+		}
+
+		await using var batch = new BatchCollector<TAgg, nil>(async(batchAgg, Ct)=>{
+			var roots = new List<TEntity>(batchAgg.Count);
+			var includeRows = new Dictionary<Type, IList<obj>>();
+			foreach(var include in aggReg.Includes){
+				includeRows[include.EntityType] = new List<obj>();
+			}
+
+			foreach(var agg in batchAgg){
+				if(agg is null){
+					throw new Exception($"Aggregate item is null. Agg={typeof(TAgg)}");
+				}
+				var aggObj = (obj)agg;
+
+				TEntity? rootEnt = null;
+				var oneToOneSeen = new HashSet<Type>();
+				foreach(var key in aggAccessor.GetGetterNames(aggObj)){
+					if(!aggAccessor.TryGet(aggObj, key, out var val) || val is null){
+						continue;
+					}
+
+					if(rootEnt is null && aggReg.RootEntityType.IsAssignableFrom(val.GetType())){
+						if(val is not TEntity castRoot){
+							throw new Exception($"Aggregate root value type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, ValueType={val.GetType()}");
+						}
+						rootEnt = castRoot;
+						continue;
+					}
+
+					if(val is IEnumerable enumerable && val is not string){
+						foreach(var item in enumerable){
+							if(item is null){
+								continue;
+							}
+							var itemType = item.GetType();
+							var include = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(itemType));
+							if(include is null){
+								continue;
+							}
+							if(include.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(include.EntityType)){
+								throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={include.EntityType}");
+							}
+							includeRows[include.EntityType].Add(item);
+							oneToOneSeen.Add(include.EntityType);
+						}
+						continue;
+					}
+
+					var valType = val.GetType();
+					var includeOne = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(valType));
+					if(includeOne is null){
+						continue;
+					}
+					if(includeOne.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(includeOne.EntityType)){
+						throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={includeOne.EntityType}");
+					}
+					includeRows[includeOne.EntityType].Add(val);
+					oneToOneSeen.Add(includeOne.EntityType);
+				}
+
+				if(rootEnt is null){
+					throw new Exception($"No root entity found in aggregate object. Agg={typeof(TAgg)}, Root={typeof(TEntity)}");
+				}
+				roots.Add(rootEnt);
+			}
+
+			await InsertRoots(roots, Ct);
+			foreach(var (includeType, rows) in includeRows){
+				if(rows.Count == 0){
+					continue;
+				}
+				if(!includeTypeInclude.TryGetValue(includeType, out var include)){
+					continue;
+				}
+				await InsertInclude(include, rows, Ct);
+			}
+
+			return NIL;
+		}, batchSize);
+
+		await foreach(var agg in NewAgg.WithCancellation(Ct)){
+			await batch.Add(agg, Ct);
+		}
+		await batch.End(Ct);
+
+		return new RespBatUpdAgg();
 	}
 
-	public Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
-		throw new NotImplementedException();
+	private async Task<nil> BatDelAggByIdCore<TAgg>(
+		IDbFnCtx Ctx
+		,IAsyncEnumerable<TId> Ids
+		,bool SoftDelete
+		,CT Ct
+	){
+		var aggReg = TblMgr.GetAgg<TAgg>();
+		if(aggReg.RootEntityType != typeof(TEntity)){
+			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
+		}
+		if(aggReg.RootIdType != typeof(TId)){
+			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
+		}
+
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
+		var rootCmdByCnt = new Dictionary<u64, ISqlCmd>();
+		var includeCmdByTypeCnt = new Dictionary<(Type, u64), ISqlCmd>();
+
+		str MkDelSql(ITable tbl, str codeCol, u64 cnt, bool softDelete){
+			var idParams = tbl.NumParams(cnt).ToList();
+			if(!softDelete){
+				return $"DELETE FROM {tbl.Qt(tbl.DbTblName)} WHERE {tbl.QtCol(codeCol)} IN ({str.Join(", ", idParams)})";
+			}
+			if(tbl.SoftDelCol is null){
+				throw new Exception($"SoftDeleteCol is null. Tbl={tbl.DbTblName}, EntityType={tbl.CodeEntityType}");
+			}
+			var pSoft = tbl.Prm("__SoftDelVal");
+			return $"UPDATE {tbl.Qt(tbl.DbTblName)} SET {tbl.QtCol(tbl.SoftDelCol.CodeColName)} = {pSoft} WHERE {tbl.QtCol(codeCol)} IN ({str.Join(", ", idParams)})";
+		}
+
+		async Task<ISqlCmd> GetRootCmd(u64 cnt, CT Ct){
+			if(rootCmdByCnt.TryGetValue(cnt, out var got)){
+				return got;
+			}
+			var cmd = await SqlCmdMkr.Prepare(Ctx, MkDelSql(T, T.CodeIdName, cnt, SoftDelete), Ct);
+			Ctx.AddToDispose(cmd);
+			rootCmdByCnt[cnt] = cmd;
+			return cmd;
+		}
+
+		async Task<ISqlCmd> GetIncludeCmd(IAggIncludeReg include, u64 cnt, CT Ct){
+			var key = (include.EntityType, cnt);
+			if(includeCmdByTypeCnt.TryGetValue(key, out var got)){
+				return got;
+			}
+			var cmd = await SqlCmdMkr.Prepare(Ctx, MkDelSql(include.Tbl, include.FKeyCodeCol, cnt, SoftDelete), Ct);
+			Ctx.AddToDispose(cmd);
+			includeCmdByTypeCnt[key] = cmd;
+			return cmd;
+		}
+
+		IDictionary<str, obj?> MkArg(ITable tbl, str codeCol, IList<TId> batchIds){
+			var cnt = (u64)batchIds.Count;
+			var idParams = tbl.NumParams(cnt).ToList();
+			var arg = ArgDict.Mk(tbl).AddManyT(idParams, batchIds, codeCol).ToDict();
+			if(SoftDelete){
+				if(tbl.SoftDelCol is null){
+					throw new Exception($"SoftDeleteCol is null. Tbl={tbl.DbTblName}, EntityType={tbl.CodeEntityType}");
+				}
+				arg[tbl.Prm("__SoftDelVal").Name] = tbl.SoftDelCol.FnDelete(null);
+			}
+			return arg;
+		}
+
+		await using var batch = new BatchCollector<TId, nil>(async(batchIds, Ct)=>{
+			if(batchIds.Count == 0){
+				return NIL;
+			}
+			var cnt = (u64)batchIds.Count;
+
+			{
+				var cmd = await GetRootCmd(cnt, Ct);
+				var arg = MkArg(T, T.CodeIdName, batchIds);
+				await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			}
+
+			foreach(var include in aggReg.Includes){
+				var cmd = await GetIncludeCmd(include, cnt, Ct);
+				var arg = MkArg(include.Tbl, include.FKeyCodeCol, batchIds);
+				await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			}
+
+			return NIL;
+		}, batchSize);
+
+		await foreach(var id in Ids.WithCancellation(Ct)){
+			await batch.Add(id, Ct);
+		}
+		await batch.End(Ct);
+		return NIL;
 	}
 
-	public Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
-		throw new NotImplementedException();
+	public async Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		await BatDelAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
+		return new RespBatHardDelAgg();
+	}
+
+	public async Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
+		return new RespBatSoftDelAgg();
 	}
 }

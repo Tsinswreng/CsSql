@@ -105,7 +105,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	#region Agg
 	
-	public Task<IRespBatUpdAgg> BatAddAgg<TAgg>(
+	public Task<IRespBatAddAgg> BatAddAgg<TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> NewAgg
 		,CT Ct
@@ -123,7 +123,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	
 	[Doc(@$"Hard Delete Both Root and its related assets")]
-	public Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(
+	public Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 	
@@ -131,8 +131,28 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"Soft Delete Both Root and its related assets,
 	if you only need to soft del the root, use {nameof(BatSoftDelById)} for the root
 	")]
-	public Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(
+	public Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
+	);
+	
+	[Doc(@$"Batch Update Aggregates.
+		for each agg, after update,
+		use `{nameof(BatGetAggById)}` will return the updated agg
+		as what I passed to `{nameof(BatHardUpdAgg)}`.
+		`Hard` means hard delete one-to-many assets that new agg doesn't have.
+	")]
+	public Task<IRespBatUpdAgg> BatHardUpdAgg<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
+	);
+	
+	[Doc(@$"Batch Update Aggregates.
+		for each agg, after update,
+		use `{nameof(BatGetAggById)}` will return the updated agg
+		as what I passed to `{nameof(BatHardUpdAgg)}`.
+		`Soft` means Soft delete one-to-many assets that new agg doesn't have.
+	")]
+	public Task<IRespBatUpdAgg> BatSoftUpdAgg<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	
 	
@@ -219,8 +239,8 @@ public class IRespBatUpdAgg{}
 public class RespBatUpdAgg:IRespBatUpdAgg{}
 
 
-public class IRespBatHardDelAgg{}
-public class RespBatHardDelAgg:IRespBatHardDelAgg{}
+public class IRespHardDelAggInId{}
+public class RespHardDelAggInId:IRespHardDelAggInId{}
 
-public class IRespBatSoftDelAgg{}
-public class RespBatSoftDelAgg:IRespBatSoftDelAgg{}
+public class IRespSoftDelAggInId{}
+public class RespSoftDelAggInId:IRespSoftDelAggInId{}

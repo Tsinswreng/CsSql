@@ -776,7 +776,7 @@ Func<
 		return new BatHardDel();
 	}
 
-	public async Task<IRespBatUpdAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+	public async Task<IRespBatAddAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
 			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
@@ -963,7 +963,7 @@ Func<
 		}
 		await batch.End(Ct);
 
-		return new RespBatUpdAgg();
+		return new RespBatAddAgg();
 	}
 
 	private async Task<nil> BatDelAggByIdCore<TAgg>(
@@ -1058,13 +1058,19 @@ Func<
 		return NIL;
 	}
 
-	public async Task<RespBatHardDelAgg> BatHardDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
 		await BatDelAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
-		return new RespBatHardDelAgg();
+		return new RespHardDelAggInId();
 	}
 
-	public async Task<RespBatSoftDelAgg> BatSoftDelAggById<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
 		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
-		return new RespBatSoftDelAgg();
+		return new RespSoftDelAggInId();
+	}
+	
+	public Task<IRespBatUpdAgg> BatHardUpdAgg<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
+	){
+		throw new NotImplementedException();
 	}
 }

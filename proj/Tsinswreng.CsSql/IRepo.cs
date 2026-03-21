@@ -10,6 +10,9 @@ naming rules:
 - Select -> Get
 - Update -> Upd
 - Delete -> Del
+
+for `Get` operation, defaultly
+soft deleted data are not included
 ")]
 public partial interface IRepo<TEntity, TId>{
 

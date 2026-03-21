@@ -136,9 +136,12 @@ public static class ExtnISqlCmdMkr{
 			,Func<IDbFnCtx, Task<TRtn>> Fn
 		){
 			var Ctx = new DbFnCtx{};
-			await z.MkEtBindTxn(Ctx, Ct);
+			await z.EnsureTxn(Ctx, Ct);
 			try{
 				var R = await Fn(Ctx);
+				if(Ctx.Txn is not null){
+					await Ctx.Txn.Commit(Ct);
+				}
 				return R;
 			}
 			catch (System.Exception ex){
@@ -146,6 +149,9 @@ public static class ExtnISqlCmdMkr{
 					await Ctx.Txn.Rollback(Ct);
 				}
 				throw;
+			}
+			finally{
+				await ((IAsyncDisposable)Ctx).DisposeAsync();
 			}
 		}
 		
@@ -161,9 +167,12 @@ public static class ExtnISqlCmdMkr{
 				return await Fn(Ctx);
 			}
 			Ctx = new DbFnCtx();
-			await z.MkEtBindTxn(Ctx, Ct);
+			await z.EnsureTxn(Ctx, Ct);
 			try{
 				var R = await Fn(Ctx);
+				if(Ctx.Txn is not null){
+					await Ctx.Txn.Commit(Ct);
+				}
 				return R;
 			}
 			catch (System.Exception ex){
@@ -171,6 +180,9 @@ public static class ExtnISqlCmdMkr{
 					await Ctx.Txn.Rollback(Ct);
 				}
 				throw;
+			}
+			finally{
+				await ((IAsyncDisposable)Ctx).DisposeAsync();
 			}
 		}
 		

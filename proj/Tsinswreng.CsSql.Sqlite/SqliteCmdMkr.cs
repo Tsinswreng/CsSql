@@ -81,9 +81,12 @@ public partial class SqliteCmdMkr
 
 
 	[Impl(typeof(IMkrTxn))]
-	public async Task<ITxn> MkEtBindTxn(
+	public async Task<ITxn> EnsureTxn(
 		IDbFnCtx Ctx, CT Ct
 	){
+		if(Ctx.Txn is not null){
+			return Ctx.Txn;
+		}
 		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConnAsy(Ct); //事務過後 Ctx會Dispose 故每次開Ctx旹其DbConn必取自DbConnGetter
 		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
 		Ctx.DbConn = DbConnection;

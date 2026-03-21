@@ -61,11 +61,14 @@ public partial class PostgresCmdMkr
 	}
 
 
-	public async Task<ITxn> MkEtBindTxn(
+	public async Task<ITxn> EnsureTxn(
 		IDbFnCtx Ctx, CT Ct
 	){
 		// pg中同一交易中 ʹ多條命令 須屬于同一連接。後MkCmd旹所用ʹ連接 亦 優先從Ctx.DbConn中取
 		//事務過後 Ctx會Dispose 故每次開Ctx旹其DbConn必取自DbConnGetter
+		if(Ctx.Txn is not null){
+			return Ctx.Txn;
+		}
 		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConnAsy(Ct);
 		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
 		Ctx.DbConn = DbConnection;

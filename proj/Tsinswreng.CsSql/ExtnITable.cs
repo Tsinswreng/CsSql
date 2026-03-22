@@ -190,7 +190,7 @@ public static class ExtnITable {
 			,obj Entity
 			,IStr_Any CodeDict
 		) {
-			if (!z.PropAccessorMgr.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
+			if (!z.PropAccessorReg.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
 				throw new Exception($"No {nameof(IPropAccessor)} registered for type: {EntityType}");
 			}
 			foreach (var (kCode, vCode) in CodeDict) {
@@ -211,7 +211,7 @@ public static class ExtnITable {
 			,Type? EntityType = null
 		) {
 			EntityType ??= Entity.GetType();
-			if (!z.PropAccessorMgr.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
+			if (!z.PropAccessorReg.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
 				throw new Exception($"No {nameof(IPropAccessor)} registered for type: {EntityType}");
 			}
 			var ans = new Str_Any();

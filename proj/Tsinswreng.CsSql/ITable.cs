@@ -17,7 +17,7 @@ public partial interface ITable{
 	public ISqlMkr SqlMkr=>DbStuff.SqlMkr;
 
 	[Doc($@"Accessor manager to read/write entity properties by string keys")]
-	public IPropAccessorMgr PropAccessorMgr{get;set;}
+	public IPropAccessorReg PropAccessorReg{get;set;}
 
 	[Doc($@"Entity type for this table")]
 	public Type CodeEntityType{get;set;}

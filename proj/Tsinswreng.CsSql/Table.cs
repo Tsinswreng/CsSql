@@ -20,7 +20,7 @@ public partial class Table:ITable{
 	public ITblMgr TblMgr{get;set;} = null!;
 	public IDbStuff DbStuff => TblMgr.DbStuff;
 
-	public IPropAccessorMgr PropAccessorMgr{get;set;}
+	public IPropAccessorReg PropAccessorReg{get;set;}
 
 	public Type CodeEntityType{get;set;}
 
@@ -28,11 +28,11 @@ public partial class Table:ITable{
 	public Table(){}
 
 	public Table(
-		IPropAccessorMgr PropAccessorMgr
+		IPropAccessorReg PropAccessorReg
 		,str Name
 		,IDictionary<str, Type> CodeCol_UpperType
 	){
-		this.PropAccessorMgr = PropAccessorMgr;
+		this.PropAccessorReg = PropAccessorReg;
 		this.DbTblName = Name;
 		this.CodeCol_UpperType = CodeCol_UpperType;
 	}
@@ -61,10 +61,10 @@ public partial class Table:ITable{
 
 
 	public static IDictionary<str, Type> GetTypeDictByAccessor(
-		IPropAccessorMgr PropAccessorMgr
+		IPropAccessorReg PropAccessorReg
 		,Type EntityClrType
 	){
-		if(!PropAccessorMgr.Type_PropAccessor.TryGetValue(EntityClrType, out var Accessor)){
+		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(EntityClrType, out var Accessor)){
 			throw new Exception($"No {nameof(IPropAccessor)} registered for entity type: {EntityClrType}");
 		}
 		var Ans = new Dictionary<str, Type>();
@@ -78,31 +78,31 @@ public partial class Table:ITable{
 	}
 
 	public static ITable<TEntity> Mk<TEntity>(
-		IPropAccessorMgr PropAccessorMgr
+		IPropAccessorReg PropAccessorReg
 		,str DbTblName
 		,IDictionary<str, Type> Key_Type
 	){
-		return Mk<TEntity>(typeof(TEntity), PropAccessorMgr, DbTblName, Key_Type);
+		return Mk<TEntity>(typeof(TEntity), PropAccessorReg, DbTblName, Key_Type);
 	}
 
 	public static ITable<TEntity> Mk<TEntity>(
-		IPropAccessorMgr PropAccessorMgr
+		IPropAccessorReg PropAccessorReg
 		,str DbTblName
 	){
 		var EntityClrType = typeof(TEntity);
-		var Key_Type = GetTypeDictByAccessor(PropAccessorMgr, EntityClrType);
-		return Mk<TEntity>(EntityClrType, PropAccessorMgr, DbTblName, Key_Type);
+		var Key_Type = GetTypeDictByAccessor(PropAccessorReg, EntityClrType);
+		return Mk<TEntity>(EntityClrType, PropAccessorReg, DbTblName, Key_Type);
 	}
 
 
 	public static ITable<TEntity> Mk<TEntity>(
 		Type EntityClrType
-		,IPropAccessorMgr PropAccessorMgr
+		,IPropAccessorReg PropAccessorReg
 		,str DbTblName
 		,IDictionary<str, Type> Key_Type
 	){
 		var t = new Table<TEntity>{
-			PropAccessorMgr = PropAccessorMgr
+			PropAccessorReg = PropAccessorReg
 			,DbTblName = DbTblName
 			,CodeCol_UpperType = Key_Type
 			,CodeEntityType = EntityClrType
@@ -114,11 +114,11 @@ public partial class Table:ITable{
 	
 
 	[Obsolete("")]
-		public static Func<str, ITable<T>> FnMkTbl<T>(IPropAccessorMgr PropAccessorMgr){
+		public static Func<str, ITable<T>> FnMkTbl<T>(IPropAccessorReg PropAccessorReg){
  		ITable<T2> Mk<T2>(str DbTblName){
-				var TypeDict = GetTypeDictByAccessor(PropAccessorMgr, typeof(T2));
+				var TypeDict = GetTypeDictByAccessor(PropAccessorReg, typeof(T2));
 			return Table.Mk<T2>(
-					PropAccessorMgr
+					PropAccessorReg
 				,DbTblName
 				,TypeDict
 			);
@@ -126,11 +126,11 @@ public partial class Table:ITable{
 		return Mk<T>;
 	}
 	
-		public static Func<str, ITblSetter<T>> FnSetTbl<T>(IPropAccessorMgr PropAccessorMgr){
+		public static Func<str, ITblSetter<T>> FnSetTbl<T>(IPropAccessorReg PropAccessorReg){
 		ITblSetter<T2> Set<T2>(str DbTblName){
-				var TypeDict = GetTypeDictByAccessor(PropAccessorMgr, typeof(T2));
+				var TypeDict = GetTypeDictByAccessor(PropAccessorReg, typeof(T2));
 			var Tbl = Table.Mk<T2>(
-					PropAccessorMgr
+					PropAccessorReg
 				,DbTblName
 				,TypeDict
 			);

@@ -24,14 +24,14 @@ public partial class SqlRepo<
 
 	public ITblMgr TblMgr{get;set;}
 	public ISqlCmdMkr SqlCmdMkr{get;set;}
-	public IPropAccessorMgr PropAccessorMgr{get;set;}
+	public IPropAccessorReg PropAccessorReg{get;set;}
 
 	public SqlRepo(
 		ITblMgr TblMgr
 		,ISqlCmdMkr SqlCmdMkr
-		,IPropAccessorMgr PropAccessorMgr
+		,IPropAccessorReg PropAccessorReg
 	){
-		this.PropAccessorMgr = PropAccessorMgr;
+		this.PropAccessorReg = PropAccessorReg;
 		this.TblMgr = TblMgr;
 		this.SqlCmdMkr = SqlCmdMkr;
 	}
@@ -784,7 +784,7 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
-		if(!PropAccessorMgr.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
+		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
 			throw new Exception($"No {nameof(IPropAccessor)} registered for aggregate type: {typeof(TAgg)}");
 		}
 
@@ -1093,7 +1093,7 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
-		if(!PropAccessorMgr.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
+		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
 			throw new Exception($"No {nameof(IPropAccessor)} registered for aggregate type: {typeof(TAgg)}");
 		}
 

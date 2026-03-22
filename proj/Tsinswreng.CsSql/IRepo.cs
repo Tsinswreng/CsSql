@@ -5,11 +5,18 @@ using Tsinswreng.CsPage;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 
 [Doc(@$"
+Common Repository Interface for SQL Database,
+provides basic CRUD operations.
+
 naming rules:
 - Insert -> Add
 - Select -> Get
 - Update -> Upd
 - Delete -> Del
+
+- NOT support auto increment id for insert operation.
+- throw exception if insert or update fails.
+- update will match the primary key of the entity as benchmark.
 
 for `Get` operation, defaultly
 soft deleted data are not included
@@ -19,7 +26,7 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"using `Id IN (...)` Clause,
 	which would ignore unexisted Id and returned list may be unordered.
 	")]
-	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdsWithDel(
+	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
@@ -34,12 +41,16 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, CT Ct
 	);
 	
+	[Doc(@$"
+	should throw exception if conflict (e.g constraint violation) etc.
+	")]
 	public Task<IRespBatInsert> BatAdd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
 	[Doc(@$"by the primary key of the entity,
 	so you don't need to provide the entity id independantly.
+	should throw exception if conflict (e.g constraint violation) etc.
 	")]
 	public Task<IRespBatUpd> BatUpdById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
@@ -53,6 +64,7 @@ public partial interface IRepo<TEntity, TId>{
 		[Ids, its count must equal to Dicts count],
 		[],
 	)
+	#Descr[should throw exception if conflict (e.g constraint violation) etc.]
 	#Examples([
 	```cs
 	
@@ -74,6 +86,7 @@ public partial interface IRepo<TEntity, TId>{
 		[Ids, its count must equal to Dicts count],
 		[],
 	)
+	#Descr[should throw exception if conflict (e.g constraint violation) etc.]
 	#Examples([
 	```cs
 	
@@ -118,8 +131,7 @@ public partial interface IRepo<TEntity, TId>{
 	public Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
-	)
-		where TAgg: class;
+	)where TAgg: class;
 	
 	
 	[Doc(@$"Hard Delete Both Root and its related assets")]

@@ -38,7 +38,7 @@ public partial class SqlRepo<
 
 	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
 	
-	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdsWithDel(
+	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -269,7 +269,7 @@ WHERE 1=1
 		u64 InBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
 
 		async Task<IList<TAgg?>> HandleOneBatch(IList<TId> OrderedBatchIds, CT Ct){
-			var rootsAsy = await GetManyInIdsWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
+			var rootsAsy = await GetManyInIdWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
 			var rootById = new Dictionary<object, TEntity>();
 			var rootIdSet = new HashSet<TId>();
 			await foreach(var root in rootsAsy.WithCancellation(Ct)){

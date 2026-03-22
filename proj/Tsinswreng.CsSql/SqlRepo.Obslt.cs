@@ -5,7 +5,7 @@ using System.Data;
 using Tsinswreng.CsCore;
 using Tsinswreng.CsTools;
 using Tsinswreng.CsPage;
-using Tsinswreng.CsStrAcc;
+using Tsinswreng.Srefl;
 using System.Collections;
 using System.Diagnostics;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;

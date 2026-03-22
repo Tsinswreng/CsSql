@@ -10,7 +10,7 @@ using System.Collections;
 using System.Diagnostics;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
-using Tsinswreng.CsStrAcc;
+using Tsinswreng.Srefl;
 
 //using T = Bo_Word;
 //TODO 拆分ⁿ使更通用化

@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-using Tsinswreng.CsStrAcc;
+using Tsinswreng.Srefl;
 
 
 /// 遷移表實體類

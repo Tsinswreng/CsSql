@@ -26,18 +26,18 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"using `Id IN (...)` Clause,
 	which would ignore unexisted Id and returned list may be unordered.
 	")]
-	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
+	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 
 	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
-	public Task<IAsyncEnumerable<TEntity?>> BatGetById(
+	public IAsyncEnumerable<TEntity?> BatGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 
-	public Task<IAsyncEnumerable<TEntity>> GetAll(
+	public IAsyncEnumerable<TEntity> GetAll(
 		IDbFnCtx Ctx, CT Ct
 	);
 	
@@ -123,12 +123,12 @@ public partial interface IRepo<TEntity, TId>{
 		,IAsyncEnumerable<TAgg> NewAgg
 		,CT Ct
 	);
-	public Task<IAsyncEnumerable<TAgg>> GetAllAgg<TAgg>(
+	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
 		IDbFnCtx Ctx, CT Ct
 	);
 	
 	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
-	public Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
+	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)where TAgg: class;

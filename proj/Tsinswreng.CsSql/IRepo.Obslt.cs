@@ -186,7 +186,7 @@ public partial interface IRepo<TEntity, TId>{
 	public Task<Func<
 		IList<TVal>
 		,CT
-		,Task<IAsyncEnumerable<IStr_Any>>
+		,IAsyncEnumerable<IStr_Any>
 	>> FnScltAllByColInVals<TVal>(
 		IDbFnCtx Ctx
 		,ITable Tbl
@@ -199,7 +199,7 @@ public partial interface IRepo<TEntity, TId>{
 	public Task<Func<
 		IList<TCol>
 		,CT
-		,Task<IAsyncEnumerable<TEntity2>>
+		,IAsyncEnumerable<TEntity2>
 	>> FnScltAllByColInVals<TEntity2, TCol>(
 		IDbFnCtx Ctx
 		,ITable Tbl

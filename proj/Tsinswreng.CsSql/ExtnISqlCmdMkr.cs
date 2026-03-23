@@ -186,14 +186,14 @@ public static class ExtnISqlCmdMkr{
 			}
 		}
 		
-		public async IAsyncEnumerable<T> RunDupliSql<T>(
+		public IAsyncEnumerable<T> RunDupliSql<T>(
 			IDbFnCtx Ctx
 			,ITable<T> Tbl
 			,IAutoBindSqlDuplicator Sql
 			,[EnumeratorCancellation] CT Ct
 		){
 			var asyE = z.RunDupliSql(Ctx, Sql, Ct);
-			
+			throw new NotImplementedException();
 		}
 		
 		

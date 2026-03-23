@@ -38,7 +38,7 @@ public partial class SqlRepo<
 
 	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
 	
-	public async Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
+	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -78,7 +78,7 @@ public partial class SqlRepo<
 		return Run();
 	}
 
-	public async Task<IAsyncEnumerable<TEntity?>> GetManyInIds(
+	public IAsyncEnumerable<TEntity?> GetManyInIds(
 		IDbFnCtx Ctx, IEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -104,7 +104,7 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 	}
 
 
-	public Task<IAsyncEnumerable<TEntity?>> BatGetById(
+	public IAsyncEnumerable<TEntity?> BatGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -139,28 +139,33 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 			}
 		}
 
-		return Task.FromResult<IAsyncEnumerable<TEntity?>>(Run());
+		return Run();
 	}
 
-	public async Task<IAsyncEnumerable<TEntity>> GetAll(
+	public IAsyncEnumerable<TEntity> GetAll(
 		IDbFnCtx Ctx, CT Ct
 	){
-		var sql =
+		async IAsyncEnumerable<TEntity> Run(){
+			var sql =
 $"""
 SELECT * FROM {T.Qt(T.DbTblName)}
 WHERE 1=1
 {T.AndSqlIsNonDel()}
 """;
-		var cmd = await SqlCmdMkr.MkCmd(Ctx, sql, Ct);
-		Ctx.AddToDispose(cmd);
-		var rows = cmd
-			.AsyE1d(Ct)
-			.Select(x=>T.DbDictToEntity<TEntity>(x))
-		;
-		return rows;
+			var cmd = await SqlCmdMkr.MkCmd(Ctx, sql, Ct);
+			Ctx.AddToDispose(cmd);
+			var rows = cmd
+				.AsyE1d(Ct)
+				.Select(x=>T.DbDictToEntity<TEntity>(x));
+			await foreach(var row in rows.WithCancellation(Ct)){
+				yield return row;
+			}
+		}
+
+		return Run();
 	}
 	
-	public Task<IAsyncEnumerable<TAgg>> GetAllAgg<TAgg>(
+	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
 		IDbFnCtx Ctx, CT Ct
 	){
 		var aggReg = TblMgr.GetAgg<TAgg>();
@@ -182,7 +187,7 @@ WHERE 1=1
 			var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
 			foreach(var include in aggReg.Includes){
 				var slctByIn = await FnScltAllByColInVals<TId>(Ctx, include.Tbl, include.FKeyCodeCol, optQry, Ct);
-				var dbAsy = await slctByIn(rootIds, Ct);
+				var dbAsy = slctByIn(rootIds, Ct);
 				await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
 					var codeDict = include.Tbl.ToCodeDict(dbDict);
 					var entity = include.FnNewEntityObj();
@@ -203,7 +208,7 @@ WHERE 1=1
 		}
 
 		async IAsyncEnumerable<TAgg> Run(){
-			var rootsAsy = await GetAll(Ctx, Ct);
+			var rootsAsy = GetAll(Ctx, Ct);
 			var rootBatch = new List<TEntity>((i32)inBatchSize);
 			var idBatch = new List<TId>((i32)inBatchSize);
 
@@ -243,10 +248,10 @@ WHERE 1=1
 			}
 		}
 
-		return Task.FromResult<IAsyncEnumerable<TAgg>>(Run());
+		return Run();
 	}
 
-	public async Task<IAsyncEnumerable<TAgg?>> BatGetAggById<TAgg>(
+	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)
@@ -269,7 +274,7 @@ WHERE 1=1
 		u64 InBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
 
 		async Task<IList<TAgg?>> HandleOneBatch(IList<TId> OrderedBatchIds, CT Ct){
-			var rootsAsy = await GetManyInIdWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
+			var rootsAsy = GetManyInIdWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
 			var rootById = new Dictionary<object, TEntity>();
 			var rootIdSet = new HashSet<TId>();
 			await foreach(var root in rootsAsy.WithCancellation(Ct)){
@@ -293,7 +298,7 @@ WHERE 1=1
 				var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
 				foreach(var include in aggReg.Includes){
 					var slctByIn = await FnScltAllByColInVals<TId>(Ctx, include.Tbl, include.FKeyCodeCol, optQry, Ct);
-					var dbAsy = await slctByIn(rootIds, Ct);
+					var dbAsy = slctByIn(rootIds, Ct);
 					await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
 						var codeDict = include.Tbl.ToCodeDict(dbDict);
 						var entity = include.FnNewEntityObj();
@@ -380,7 +385,7 @@ Func<
 		var fn = await FnScltAllByColInVals<TKey>(Ctx, Tbl, CodeCol, OptQry, Ct);
 		return async(Tbl, Memb, Keys, Ct)=>{
 			IList<TKey> KeyList = Keys.Where(x=>x is not null).ToList()!;
-			var poPage = await fn(KeyList, Ct);
+			var poPage = fn(KeyList, Ct);
 			var dicts = await poPage.ToListAsync(Ct);
 			var pos = dicts.Select(x=>Tbl.DbDictToEntity<TPo>(x));
 			IDictionary<TKey, IList<TPo>> posByKey = pos.GroupBy(Memb).ToDictionary(g=>g.Key, g=>(IList<TPo>)g.ToList());

@@ -714,7 +714,7 @@ var SqlCmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
 	public async Task<Func<
 		IList<TVal>
 		,CT
-		,Task<IAsyncEnumerable<IStr_Any>>
+		,IAsyncEnumerable<IStr_Any>
 	>> FnScltAllByColInVals<TVal>(
 		IDbFnCtx Ctx
 		,ITable Tbl
@@ -731,7 +731,7 @@ WHERE 1=1
 AND {T.QtCol(CodeCol)} IN ({str.Join(",", numParams)})
 """;
 		var SqlCmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
-		return async(Args ,Ct)=>{
+		return (Args ,Ct)=>{
 			if(Args.Count < numParams.Count){
 				throw new Exception("Args.Count < numParams.Count");
 			}
@@ -744,7 +744,7 @@ AND {T.QtCol(CodeCol)} IN ({str.Join(",", numParams)})
 public async Task<Func<
 		IList<TCol>
 		,CT
-		,Task<IAsyncEnumerable<TEntity2>>
+		,IAsyncEnumerable<TEntity2>
 	>> FnScltAllByColInVals<TEntity2, TCol>(
 		IDbFnCtx Ctx
 		,ITable Tbl
@@ -764,7 +764,7 @@ WHERE 1=1
 AND {Tbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)})
 """;
 		var SqlCmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
-		return async(Args ,Ct)=>{
+		return (Args ,Ct)=>{
 			if(Args.Count < numParams.Count){
 				throw new Exception("Args.Count < numParams.Count");
 			}

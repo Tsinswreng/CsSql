@@ -72,7 +72,7 @@ public static class ExtnITable {
 		#Params([Expression to extract member name from])
 		#Rtn[IField object with table context]
 		")]
-		public IField QtCol<T>(Expression<Func<T, obj?>> ExprMemb) {
+		public IDbField QtCol<T>(Expression<Func<T, obj?>> ExprMemb) {
 			var memberName = ToolExpr.GetMemberName<T>(ExprMemb);
 			var R = new Field(z, memberName);
 			return R;

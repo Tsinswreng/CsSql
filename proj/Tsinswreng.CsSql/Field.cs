@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-public class Field:IField{
+public class Field:IDbField{
 	public Field(ITable Tbl, str CodeName){
 		this.Tbl = Tbl;
 		this.CodeName = CodeName;

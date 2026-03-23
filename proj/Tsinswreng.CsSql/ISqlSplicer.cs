@@ -4,7 +4,11 @@ using Tsinswreng.CsTools;
 using Tsinswreng.CsPage;
 namespace Tsinswreng.CsSql;
 
-public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
+[Doc(@$"when you call the splicer apis,
+you must keep the order the same as the sql syntax.
+e.g you must keep `select` before `from`
+")]
+public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	public ITable Tbl{get;set;}
 	public IList<obj> Segs{get;set;} = [];
 	public IList<IParamAutoBinder> ParamAutoBinders { get; set; } = [];
@@ -137,38 +141,22 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	}
 
 
-	public ISqlSplicer<E> Bool(Expression<Func<E, obj?>> GetMember, str Op, IParam Param){
-		var memb = Memb(GetMember);
-		return AddSeg(QtCol(memb)).AddSeg(Op).AddSeg(Param);
-	}
-	public ISqlSplicer<E> Bool(str Memb, str Op, out IParam Param){
-		Param = Prm(Memb);
-		return AddSeg(QtTblCol(Memb)).AddSeg(Op).AddSeg(Param);
-	}
-	public ISqlSplicer<E> Bool(Expression<Func<E, obj?>> GetMember, str Op, out IParam Param){
-		var memb = Memb(GetMember);
-		Param = Prm(memb);
-		return Bool(GetMember, Op, Param);
-	}
-
-
+	#region BindedParam
+	[Doc($"""
+	#Examples([
+	fn(x=>x.MyField, "LIKE", x=>x.One(MyArg))
+	])
+	""")]
 	public ISqlSplicer<E> Bool(
-		str BoolOp
-		,Expression<Func<E, obj?>> GetMember, str Op, out IParam Param
+		Expression<Func<E, obj?>> GetMember
+		,str Op
+		,Func<SqlArgBinderFactory, IParamAutoBinder> Bind
 	){
-		AddSeg(BoolOp);
-		return Bool(GetMember, Op, out Param);
-	}
-	public ISqlSplicer<E> And(Expression<Func<E, obj?>> GetMember, str Op, out IParam Param){
-		Bool("AND", GetMember, Op, out Param);
+		Bool(GetMember, Op, out var param);
+		var binder = Bind(new SqlArgBinderFactory(param, Tbl, Memb(GetMember)));
+		ParamAutoBinders.Add(binder);
 		return this;
 	}
-
-	public ISqlSplicer<E> AndEq(Expression<Func<E, obj?>> GetMember, out IParam Param){
-		return And(GetMember, "=", out Param);
-	}
-
-	
 	public ISqlSplicer<E> AndEq(
 		Expression<Func<E, obj?>> GetMember,
 		Func<SqlArgBinderFactory, IParamAutoBinder> Bind
@@ -190,9 +178,15 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return r;
 	}
 
-
-
+	#endregion BindedParam
+	
 	public ISqlSplicer<E> OrderBy(str Raw){
+		AddSeg($"ORDER BY {Raw}");
+		return this;
+	}
+	
+	public ISqlSplicer<E> OrderBy(IList<str> Raws){
+		var Raw = string.Join(", ", Raws);
 		AddSeg($"ORDER BY {Raw}");
 		return this;
 	}
@@ -201,16 +195,13 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		AddSeg($"ORDER BY {Raw} DESC");
 		return this;
 	}
+	
+	[Doc(@$"Only support one column for order by.")]
 	public ISqlSplicer<E> OrderByDesc(Expression<Func<E, obj?>> GetMember){
 		OrderByDesc(QtCol(Memb(GetMember)));
 		return this;
 	}
-	public ISqlSplicer<E> LimOfst(out IParam Lim, out IParam Ofst){
-		var seg = Tbl.SqlMkr.ParamLimOfst(out Lim, out Ofst);
-		AddSeg(seg);
-		return this;
-	}
-	
+
 	[Doc(@$"Bind")]
 	public ISqlSplicer<E> LimOfst(IPageQry Qry){
 		throw new NotImplementedException();
@@ -229,16 +220,7 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return Eq(QtTblWithMemb(ExprMemb), Right);
 	}
 
-	public ISqlSplicer<E> Eq(Expression<Func<E, obj?>> ExprMemb, IParam Right){
-		return AddSeg(QtTblWithMemb(ExprMemb)).AddSeg("=").AddSeg(Right);
-	}
-
-	public ISqlSplicer<E> Eq(Expression<Func<E, obj?>> ExprMemb, out IParam Right){
-		var memb = Memb(ExprMemb);
-		Right = Prm(memb);
-		return AddSeg(QtTblWithMemb(ExprMemb)).AddSeg("=").AddSeg(Right);
-	}
-
+	///UPDATE {Qt(Tbl.DbTblName)} SET
 	public ISqlSplicer<E> UpdateSet(){
 		return AddSeg($"UPDATE {Qt(Tbl.DbTblName)} SET");
 	}
@@ -246,17 +228,21 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	public ISqlSplicer<E> With(str Raw){
 		return AddSeg("WITH").AddSeg(Raw);
 	}
+	
+	[Doc(@$"`AS`")]
 	public ISqlSplicer<E> As(){
 		return AddSeg("AS");
 	}
 
+	[Doc(@$"`,`")]
 	public ISqlSplicer<E> C(){
 		return AddSeg(", ");
 	}
+	[Doc(@$"`(`")]
 	public ISqlSplicer<E> PL(){
 		return AddSeg("(");
 	}
-
+	[Doc(@$"`)`")]
 	public ISqlSplicer<E> PR(){
 		return AddSeg(")");
 	}

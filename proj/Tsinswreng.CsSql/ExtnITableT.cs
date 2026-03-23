@@ -17,7 +17,7 @@ public static partial class ExtnITableT{
 			return t.DbCol(memb);
 		}
 
-		public IField QtCol(Expression<Func<T, obj?>> ExprMemb){
+		public IDbField QtCol(Expression<Func<T, obj?>> ExprMemb){
 			var t = (ITable)z;
 			return t.QtCol<T>(ExprMemb);
 		}

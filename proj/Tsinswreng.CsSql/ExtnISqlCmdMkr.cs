@@ -186,14 +186,20 @@ public static class ExtnISqlCmdMkr{
 			}
 		}
 		
+		[Doc(@$"
+		#See[{nameof(RunDupliSql)}] Without param type.
+		#Rtn[entities]
+		")]
 		public IAsyncEnumerable<T> RunDupliSql<T>(
 			IDbFnCtx Ctx
 			,ITable<T> Tbl
 			,IAutoBindSqlDuplicator Sql
-			,[EnumeratorCancellation] CT Ct
-		){
+			,CT Ct
+		)where T: new()
+		{
 			var asyE = z.RunDupliSql(Ctx, Sql, Ct);
-			throw new NotImplementedException();
+			var r = asyE.Select(x=>Tbl.DbDictToEntity(x));
+			return r;
 		}
 		
 		

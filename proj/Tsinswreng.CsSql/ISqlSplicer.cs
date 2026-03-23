@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Collections;
 using Tsinswreng.CsTools;
+using Tsinswreng.CsPage;
 namespace Tsinswreng.CsSql;
 
 public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
@@ -167,6 +168,7 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return And(GetMember, "=", out Param);
 	}
 
+	
 	public ISqlSplicer<E> AndEq(
 		Expression<Func<E, obj?>> GetMember,
 		Func<SqlArgBinderFactory, IParamAutoBinder> Bind
@@ -207,6 +209,11 @@ public class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		var seg = Tbl.SqlMkr.ParamLimOfst(out Lim, out Ofst);
 		AddSeg(seg);
 		return this;
+	}
+	
+	[Doc(@$"Bind")]
+	public ISqlSplicer<E> LimOfst(IPageQry Qry){
+		throw new NotImplementedException();
 	}
 
 	public ISqlSplicer<E> Set(){

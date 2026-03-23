@@ -38,7 +38,7 @@ public partial class SqlRepo<
 
 	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
 	
-	public Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
+	public async Task<IAsyncEnumerable<TEntity?>> GetManyInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -75,10 +75,10 @@ public partial class SqlRepo<
 			}
 		}
 
-		return Task.FromResult<IAsyncEnumerable<TEntity?>>(Run());
+		return Run();
 	}
 
-	public async Task<IAsyncEnumerable<TEntity?>> SlctManyInIds(
+	public async Task<IAsyncEnumerable<TEntity?>> GetManyInIds(
 		IDbFnCtx Ctx, IEnumerable<TId> Ids
 		,CT Ct
 	){

@@ -186,7 +186,15 @@ public static class ExtnISqlCmdMkr{
 			}
 		}
 		
-		
+		public async IAsyncEnumerable<T> RunDupliSql<T>(
+			IDbFnCtx Ctx
+			,ITable<T> Tbl
+			,IAutoBindSqlDuplicator Sql
+			,[EnumeratorCancellation] CT Ct
+		){
+			var asyE = z.RunDupliSql(Ctx, Sql, Ct);
+			
+		}
 		
 		
 		[Doc(@$"
@@ -202,7 +210,7 @@ public static class ExtnISqlCmdMkr{
 			,IAutoBindSqlDuplicator Sql
 			,[EnumeratorCancellation] CT Ct
 		){
-			var BatchSize = z.DbSrcType.Eq(EDbSrcType.Sqlite) ? 1ul : 500ul;
+			var BatchSize = z.DbSrcType.Eq(EDbSrcType.Sqlite) ? 1ul : 500ul; //TODO
 			var (multiBinders, manyAsyncBinders, oneBinders) = SplitBinders(Sql.ParamAutoBinders);
 
 			ISqlCmd? fullBatchCmd = null;

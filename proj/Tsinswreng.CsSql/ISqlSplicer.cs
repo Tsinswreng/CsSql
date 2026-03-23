@@ -204,7 +204,10 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 
 	[Doc(@$"Bind")]
 	public ISqlSplicer<E> LimOfst(IPageQry Qry){
-		throw new NotImplementedException();
+		var r = LimOfst(out var lim, out var ofst);
+		ParamAutoBinders.Add(new SqlArgBinderFactory(lim, Tbl).One(Qry.PageSize));
+		ParamAutoBinders.Add(new SqlArgBinderFactory(ofst, Tbl).One(Qry.Offset_()));
+		return r;
 	}
 
 	public ISqlSplicer<E> Set(){

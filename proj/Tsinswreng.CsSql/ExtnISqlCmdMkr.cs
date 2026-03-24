@@ -47,11 +47,9 @@ public static class ExtnISqlCmdMkr{
 		IArgDict ArgDict,
 		[EnumeratorCancellation] CT Ct
 	){
-		var d2 = SqlCmd.Args(ArgDict).AsyE2d(Ct);
-		await foreach(var d1 in d2.WithCancellation(Ct)){
-			await foreach(var row in d1.WithCancellation(Ct)){
-				yield return row;
-			}
+		var d1 = SqlCmd.Args(ArgDict).AsyE1d(Ct);
+		await foreach(var row in d1.WithCancellation(Ct)){
+			yield return row;
 		}
 	}
 
@@ -201,9 +199,9 @@ public static class ExtnISqlCmdMkr{
 		
 		[Doc(@$"
 		#See[{nameof(RunDupliSql)}] Without param type.
-		#Rtn[entities]
+		#Rtn[entities. would emits null placeholder if the corresponding arg got null]
 		")]
-		public IAsyncEnumerable<T> RunDupliSql<T>(
+		public IAsyncEnumerable<T?> RunDupliSql<T>(
 			IDbFnCtx Ctx
 			,ITable<T> Tbl
 			,IAutoBindSqlDuplicator Sql
@@ -211,7 +209,7 @@ public static class ExtnISqlCmdMkr{
 		)where T: new()
 		{
 			var asyE = z.RunDupliSql(Ctx, Sql, Ct);
-			var r = asyE.Select(x=>Tbl.DbDictToEntity(x));
+			var r = asyE.Where(x=>x is not null).Select(x=>Tbl.DbDictToEntity(x));
 			return r;
 		}
 		

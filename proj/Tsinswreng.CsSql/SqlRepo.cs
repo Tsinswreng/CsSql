@@ -110,7 +110,8 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 	){
 		var Sql = T.SqlSplicer().Select("*").From().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
-		return SqlCmdMkr.RunDupliSql(Ctx, T, Sql, Ct);
+		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
+		return dicts.Select(x=>x is null ? null : T.DbDictToEntity<TEntity>(x));
 
 		// var bat = AutoBatch<TId, IAsyncEnumerable<TEntity?>>.Mk(
 		// 	Ctx, SqlCmdMkr, Sql,

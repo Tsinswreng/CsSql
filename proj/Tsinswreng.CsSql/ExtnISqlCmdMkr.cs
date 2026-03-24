@@ -42,6 +42,19 @@ public static class ExtnISqlCmdMkr{
 		}
 	}
 
+	private static async IAsyncEnumerable<IDictionary<str, obj?>> YieldRows(
+		ISqlCmd SqlCmd,
+		IArgDict ArgDict,
+		[EnumeratorCancellation] CT Ct
+	){
+		var d2 = SqlCmd.Args(ArgDict).AsyE2d(Ct);
+		await foreach(var d1 in d2.WithCancellation(Ct)){
+			await foreach(var row in d1.WithCancellation(Ct)){
+				yield return row;
+			}
+		}
+	}
+
 	private static async Task<ISqlCmd> EnsureCmdForBatch(
 		ISqlCmdMkr CmdMkr,
 		IDbFnCtx Ctx,
@@ -230,7 +243,7 @@ public static class ExtnISqlCmdMkr{
 					foreach(var binder in oneBinders){
 						binder.Bind(args);
 					}
-					await foreach(var row in YieldRowsOrNull(cmd, args, Ct)){
+					await foreach(var row in YieldRows(cmd, args, Ct)){
 						yield return row;
 					}
 					yield break;

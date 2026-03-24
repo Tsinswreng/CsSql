@@ -109,37 +109,38 @@ SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(",
 		,CT Ct
 	){
 		var Sql = T.SqlSplicer().Select("*").From().Where1()
-		.And().Bool(T.CodeIdName, "=", out var PId);
+		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
+		return SqlCmdMkr.RunDupliSql(Ctx, T, Sql, Ct);
 
-		var bat = AutoBatch<TId, IAsyncEnumerable<TEntity?>>.Mk(
-			Ctx, SqlCmdMkr, Sql,
-			async(z, Ids, Ct)=>{
-				var Args = ArgDict.Mk(T).AddManyT(PId, Ids, T.CodeIdName);
-				var RawDicts = z.SqlCmd.Args(Args).AsyE1dWithNull(Ct);
-				return RawDicts.Select(x=>x is null? null : T.DbDictToEntity<TEntity>(x));
-			}
-		);
+		// var bat = AutoBatch<TId, IAsyncEnumerable<TEntity?>>.Mk(
+		// 	Ctx, SqlCmdMkr, Sql,
+		// 	async(z, Ids, Ct)=>{
+		// 		var Args = ArgDict.Mk(T).AddManyT(PId, Ids, T.CodeIdName);
+		// 		var RawDicts = z.SqlCmd.Args(Args).AsyE1dWithNull(Ct);
+		// 		return RawDicts.Select(x=>x is null? null : T.DbDictToEntity<TEntity>(x));
+		// 	}
+		// );
 
-		async IAsyncEnumerable<TEntity?> Run(){
-			await using var Bat = bat;
-			await foreach(var id in Ids.WithCancellation(Ct)){
-				var oneBatch = await Bat.Add(id, Ct);
-				if(oneBatch is null){
-					continue;
-				}
-				await foreach(var item in oneBatch.WithCancellation(Ct)){
-					yield return item;
-				}
-			}
-			var tailBatch = await Bat.End(Ct);
-			if(tailBatch is not null){
-				await foreach(var item in tailBatch.WithCancellation(Ct)){
-					yield return item;
-				}
-			}
-		}
+		// async IAsyncEnumerable<TEntity?> Run(){
+		// 	await using var Bat = bat;
+		// 	await foreach(var id in Ids.WithCancellation(Ct)){
+		// 		var oneBatch = await Bat.Add(id, Ct);
+		// 		if(oneBatch is null){
+		// 			continue;
+		// 		}
+		// 		await foreach(var item in oneBatch.WithCancellation(Ct)){
+		// 			yield return item;
+		// 		}
+		// 	}
+		// 	var tailBatch = await Bat.End(Ct);
+		// 	if(tailBatch is not null){
+		// 		await foreach(var item in tailBatch.WithCancellation(Ct)){
+		// 			yield return item;
+		// 		}
+		// 	}
+		// }
 
-		return Run();
+		// return Run();
 	}
 
 	public IAsyncEnumerable<TEntity> GetAll(

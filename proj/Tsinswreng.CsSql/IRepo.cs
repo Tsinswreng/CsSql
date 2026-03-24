@@ -147,7 +147,7 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 	
-	[Doc(@$"Batch Update Aggregates.
+	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
 		use `{nameof(BatGetAggById)}` will return the updated agg
 		as what I passed to `{nameof(BatHardUpdAgg)}`.
@@ -157,7 +157,7 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	
-	[Doc(@$"Batch Update Aggregates.
+	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
 		use `{nameof(BatGetAggById)}` will return the updated agg
 		as what I passed to `{nameof(BatHardUpdAgg)}`.

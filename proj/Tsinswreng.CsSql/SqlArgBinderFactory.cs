@@ -5,7 +5,7 @@ namespace Tsinswreng.CsSql;
 public class SqlArgBinderFactory{
 	public IParam Param { get; set; }
 	public ITable? Tbl{get;set;}
-	//TODO 處理CodeColo
+	//TODO 處理CodeCol 後可用于精細UpperToRaw類型轉換
 	public str? CodeCol{get;set;}
 	public SqlArgBinderFactory(
 		IParam Param

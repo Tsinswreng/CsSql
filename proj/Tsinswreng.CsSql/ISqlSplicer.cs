@@ -142,18 +142,28 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 
 
 	#region BindedParam
+	
+	public ISqlSplicer<E> Bool(
+		Expression<Func<E, obj?>> GetMember
+		,str Op
+		,Func<SqlArgBinderFactory, IParamAutoBinder> Bind
+	){
+		var CodeCol = Memb(GetMember);
+		return Bool(CodeCol, Op, Bind);
+	}
+	
 	[Doc($"""
 	#Examples([
 	fn(x=>x.MyField, "LIKE", x=>x.One(MyArg))
 	])
 	""")]
 	public ISqlSplicer<E> Bool(
-		Expression<Func<E, obj?>> GetMember
+		str CodeCol
 		,str Op
 		,Func<SqlArgBinderFactory, IParamAutoBinder> Bind
 	){
-		Bool(GetMember, Op, out var param);
-		var binder = Bind(new SqlArgBinderFactory(param, Tbl, Memb(GetMember)));
+		Bool(CodeCol, Op, out var param);
+		var binder = Bind(new SqlArgBinderFactory(param, Tbl, CodeCol));
 		ParamAutoBinders.Add(binder);
 		return this;
 	}

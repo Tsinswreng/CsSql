@@ -37,15 +37,30 @@ public partial class SqlRepo<
 	}
 
 	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
-	
-	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
+
+	/// <summary>
+	/// Soft-delete filter SQL segment. when <paramref name="WithDel"/> is true, include deleted rows.
+	/// </summary>
+	private str MkNonDelFilterSql(bool WithDel){
+		if(WithDel){
+			return "";
+		}
+		return "\n" + T.AndSqlIsNonDel();
+	}
+
+	private IAsyncEnumerable<TEntity?> GetManyInIdCore(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,bool WithDel
 		,CT Ct
 	){
 		IList<IParam> Params = [];
 		var sqlD = FnSqlDuplicator.Mk((Cnt)=>{
 			Params = T.NumParams(Cnt);
-			return $"SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)})" ;
+			return
+$"""
+SELECT * FROM {T.Qt(T.DbTblName)}
+WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(WithDel)}
+""";
 		});
 		var bat = SqlCmdMkr.AutoBatch<TId, IAsyncEnumerable<TEntity?>>(
 			Ctx, sqlD,
@@ -78,81 +93,30 @@ public partial class SqlRepo<
 		return Run();
 	}
 
-	public IAsyncEnumerable<TEntity?> GetManyInIds(
-		IDbFnCtx Ctx, IEnumerable<TId> Ids
-		,CT Ct
-	){
-		IList<IParam> Params = [];
-		var sqlD = FnSqlDuplicator.Mk((Cnt)=>{
-			Params = T.NumParams(Cnt);
-			return 
-$"""
-SELECT * FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)})
-{T.AndSqlIsNonDel()}
-""" ;
-		});
-		var bat = SqlCmdMkr.AutoBatch<TId, IAsyncEnumerable<TEntity?>>(
-			Ctx, sqlD,
-			async(z, Ids, Ct)=>{
-				var Args = ArgDict.Mk(T).AddManyT(Params, Ids, T.CodeIdName);
-				var RawDicts = z.SqlCmd.Args(Args).AsyE1d(Ct);
-				return RawDicts.Select(x=>T.DbDictToEntity(x));
-			}
-		);
-		var R = bat.AddToEnd(Ids, Ct);
-		return R.Flat();
-	}
-
-
-	public IAsyncEnumerable<TEntity?> BatGetById(
+	private IAsyncEnumerable<TEntity?> BatGetByIdCore(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,bool WithDel
 		,CT Ct
 	){
 		var Sql = T.SqlSplicer().Select("*").From().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
+		if(!WithDel && T.SoftDelCol is not null){
+			Sql.And(T.SoftDelCol.FnSqlIsNonDel());
+		}
 		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
 		return dicts.Select(x=>x is null ? null : T.DbDictToEntity<TEntity>(x));
-
-		// var bat = AutoBatch<TId, IAsyncEnumerable<TEntity?>>.Mk(
-		// 	Ctx, SqlCmdMkr, Sql,
-		// 	async(z, Ids, Ct)=>{
-		// 		var Args = ArgDict.Mk(T).AddManyT(PId, Ids, T.CodeIdName);
-		// 		var RawDicts = z.SqlCmd.Args(Args).AsyE1dWithNull(Ct);
-		// 		return RawDicts.Select(x=>x is null? null : T.DbDictToEntity<TEntity>(x));
-		// 	}
-		// );
-
-		// async IAsyncEnumerable<TEntity?> Run(){
-		// 	await using var Bat = bat;
-		// 	await foreach(var id in Ids.WithCancellation(Ct)){
-		// 		var oneBatch = await Bat.Add(id, Ct);
-		// 		if(oneBatch is null){
-		// 			continue;
-		// 		}
-		// 		await foreach(var item in oneBatch.WithCancellation(Ct)){
-		// 			yield return item;
-		// 		}
-		// 	}
-		// 	var tailBatch = await Bat.End(Ct);
-		// 	if(tailBatch is not null){
-		// 		await foreach(var item in tailBatch.WithCancellation(Ct)){
-		// 			yield return item;
-		// 		}
-		// 	}
-		// }
-
-		// return Run();
 	}
 
-	public IAsyncEnumerable<TEntity> GetAll(
-		IDbFnCtx Ctx, CT Ct
+	private IAsyncEnumerable<TEntity> GetAllCore(
+		IDbFnCtx Ctx
+		,bool WithDel
+		,CT Ct
 	){
 		async IAsyncEnumerable<TEntity> Run(){
 			var sql =
 $"""
 SELECT * FROM {T.Qt(T.DbTblName)}
-WHERE 1=1
-{T.AndSqlIsNonDel()}
+WHERE 1=1{MkNonDelFilterSql(WithDel)}
 """;
 			var cmd = await SqlCmdMkr.MkCmd(Ctx, sql, Ct);
 			Ctx.AddToDispose(cmd);
@@ -166,9 +130,11 @@ WHERE 1=1
 
 		return Run();
 	}
-	
-	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
-		IDbFnCtx Ctx, CT Ct
+
+	private IAsyncEnumerable<TAgg> GetAllAggCore<TAgg>(
+		IDbFnCtx Ctx
+		,bool WithDel
+		,CT Ct
 	){
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
@@ -210,7 +176,7 @@ WHERE 1=1
 		}
 
 		async IAsyncEnumerable<TAgg> Run(){
-			var rootsAsy = GetAll(Ctx, Ct);
+			var rootsAsy = GetAllCore(Ctx, WithDel, Ct);
 			var rootBatch = new List<TEntity>((i32)inBatchSize);
 			var idBatch = new List<TId>((i32)inBatchSize);
 
@@ -253,8 +219,9 @@ WHERE 1=1
 		return Run();
 	}
 
-	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
+	private IAsyncEnumerable<TAgg?> BatGetAggByIdCore<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,bool WithDel
 		,CT Ct
 	)
 		where TAgg: class
@@ -276,7 +243,7 @@ WHERE 1=1
 		u64 InBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
 
 		async Task<IList<TAgg?>> HandleOneBatch(IList<TId> OrderedBatchIds, CT Ct){
-			var rootsAsy = GetManyInIdWithDel(Ctx, ToAsyncIds(OrderedBatchIds), Ct);
+			var rootsAsy = GetManyInIdCore(Ctx, ToAsyncIds(OrderedBatchIds), WithDel, Ct);
 			var rootById = new Dictionary<object, TEntity>();
 			var rootIdSet = new HashSet<TId>();
 			await foreach(var root in rootsAsy.WithCancellation(Ct)){
@@ -360,6 +327,88 @@ WHERE 1=1
 		}
 
 		return Fn(Run());
+	}
+	
+	public IAsyncEnumerable<TEntity?> GetManyInId(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return GetManyInIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return GetManyInIdCore(Ctx, Ids, true, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> GetManyInIds(
+		IDbFnCtx Ctx, IEnumerable<TId> Ids
+		,CT Ct
+	){
+		async IAsyncEnumerable<TId> ToAsyE(){
+			foreach(var id in Ids){
+				yield return id;
+			}
+		}
+		return GetManyInIdCore(Ctx, ToAsyE(), false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> BatGetById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return BatGetByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return BatGetByIdCore(Ctx, Ids, true, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity> GetAll(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllCore(Ctx, false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity> GetAllWithDel(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllCore(Ctx, true, Ct);
+	}
+	
+	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllAggCore<TAgg>(Ctx, false, Ct);
+	}
+
+	public IAsyncEnumerable<TAgg> GetAllAggWithDel<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllAggCore<TAgg>(Ctx, true, Ct);
+	}
+
+	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)
+		where TAgg: class
+	{
+		return BatGetAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<TAgg?> BatGetAggByIdWithDel<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)
+		where TAgg: class
+	{
+		return BatGetAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
 	}
 
 

@@ -19,9 +19,13 @@ naming rules:
 - update will match the primary key of the entity as benchmark.
 
 for `Get` operation, defaultly
-soft deleted data are not included
+soft deleted data are not included.
 ")]
 public partial interface IRepo<TEntity, TId>{
+	public IAsyncEnumerable<TEntity?> GetManyInId(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	);
 
 	[Doc(@$"using `Id IN (...)` Clause,
 	which would ignore unexisted Id and returned list may be unordered.
@@ -31,8 +35,13 @@ public partial interface IRepo<TEntity, TId>{
 		,CT Ct
 	);
 
-	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
 	public IAsyncEnumerable<TEntity?> BatGetById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	);
+
+	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
+	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
@@ -40,6 +49,11 @@ public partial interface IRepo<TEntity, TId>{
 	public IAsyncEnumerable<TEntity> GetAll(
 		IDbFnCtx Ctx, CT Ct
 	);
+	
+	public IAsyncEnumerable<TEntity> GetAllWithDel(
+		IDbFnCtx Ctx, CT Ct
+	);
+	
 	
 	[Doc(@$"
 	should throw exception if conflict (e.g constraint violation) etc.
@@ -126,9 +140,17 @@ public partial interface IRepo<TEntity, TId>{
 	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
 		IDbFnCtx Ctx, CT Ct
 	);
+	public IAsyncEnumerable<TAgg> GetAllAggWithDel<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	);
 	
 	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
 	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)where TAgg: class;
+	
+	public IAsyncEnumerable<TAgg?> BatGetAggByIdWithDel<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)where TAgg: class;
@@ -149,7 +171,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
-		use `{nameof(BatGetAggById)}` will return the updated agg
+		use `{nameof(BatGetAggByIdWithDel)}` will return the updated agg
 		as what I passed to `{nameof(BatHardUpdAgg)}`.
 		`Hard` means hard delete one-to-many assets that new agg doesn't have.
 	")]
@@ -159,7 +181,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
-		use `{nameof(BatGetAggById)}` will return the updated agg
+		use `{nameof(BatGetAggByIdWithDel)}` will return the updated agg
 		as what I passed to `{nameof(BatHardUpdAgg)}`.
 		`Soft` means Soft delete one-to-many assets that new agg doesn't have.
 	")]

@@ -47,8 +47,40 @@ public abstract partial class BaseSqlCmd<
 
 	public virtual ISqlCmd AttachCtxTxn(IDbFnCtx Ctx){
 		if(Ctx?.Txn is not null){
+			if(Ctx.Txn.RawTxn is DbTransaction rawTxn){
+				if(!ReferenceEquals(rawTxn.Connection, RawCmd.Connection)){
+					return this;
+				}
+			}
 			AttachCtxTxn(Ctx.Txn);
 		}
+/* 
+廢棄代碼:
+		try{
+			var RawReader = await RawCmd.ExecuteReaderAsync(Ct);
+			return new BaseResultReader(
+				this
+				,RawCmd
+				,RawReader
+				,DbValConvtr
+			);
+		}
+		catch(InvalidOperationException ex) when(
+			ex.Message.Contains(
+				"transaction object is not associated with the same connection object as this command",
+				StringComparison.OrdinalIgnoreCase
+			)
+		){
+			RawCmd.Transaction = null;
+			var RawReader = await RawCmd.ExecuteReaderAsync(Ct);
+			return new BaseResultReader(
+				this
+				,RawCmd
+				,RawReader
+				,DbValConvtr
+			);
+		}
+ */
 		return this;
 	}
 

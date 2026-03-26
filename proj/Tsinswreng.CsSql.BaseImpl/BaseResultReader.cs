@@ -49,14 +49,14 @@ public class BaseResultReader : IResultReader{
 		do{
 			// ★ 核心：为【当前结果集】创建一个「内层异步枚举器」，读取当前结果集的所有行
 			// 外层直接 yield return 这个内层枚举器，完美实现二维IAsyncEnumerable
-			yield return ReadCurrentResultSetRowsAsync(Reader, Ct);
+			yield return ReadCurrentResultSetRows(Reader, Ct);
 
 			// ★ 切换到下一个结果集，带取消令牌，无则退出循环
 		} while (await Reader.NextResultAsync(Ct));
 	}
 
 	// ★ 私有内层方法：负责读取【单个结果集】的所有行，返回单行数据的异步枚举
-	private async IAsyncEnumerable<IDictionary<str, obj?>> ReadCurrentResultSetRowsAsync(
+	private async IAsyncEnumerable<IDictionary<str, obj?>> ReadCurrentResultSetRows(
 		DbDataReader reader,
 		[EnumeratorCancellation]
 		CT Ct

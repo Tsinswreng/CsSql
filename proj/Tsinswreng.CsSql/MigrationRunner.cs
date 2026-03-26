@@ -37,7 +37,7 @@ public class MigrationRunner{
 	/// 在單個事務中執行所有未應用遷移。
 	///
 	/// 調用方通常只需要在部署腳本、測試工具或應用啓動初始化時調這一個入口。
-	public async Task<nil> UpAsy(CT Ct){
+	public async Task<nil> Up(CT Ct){
 		return await TxnWrapper.Wrap<nil>(
 			async(Ctx, Ct)=>{
 				return async(Ct)=>{

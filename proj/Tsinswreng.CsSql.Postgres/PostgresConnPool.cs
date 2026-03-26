@@ -11,7 +11,7 @@ public class PostgresConnPool : IDbConnMgr{
 		this.DataSource = DataSource;
 	}
 
-	public async Task<nil> AfterUsingConnAsy(IDbConnection Conn, CT Ct){
+	public async Task<nil> AfterUsingConn(IDbConnection Conn, CT Ct){
 		if(Conn is IAsyncDisposable asyncDisposable){
 			await asyncDisposable.DisposeAsync();
 		}else{
@@ -20,7 +20,7 @@ public class PostgresConnPool : IDbConnMgr{
 		return NIL;
 	}
 
-	public async Task<IDbConnection> GetConnAsy(CT Ct){
+	public async Task<IDbConnection> GetConn(CT Ct){
 		return await DataSource.OpenConnectionAsync(Ct);
 	}
 }

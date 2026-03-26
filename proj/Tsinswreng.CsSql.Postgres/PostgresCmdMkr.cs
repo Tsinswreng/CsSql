@@ -20,7 +20,7 @@ public partial class PostgresCmdMkr
 		,str Sql
 		,CT Ct
 	){
-		var DbConnection = DbFnCtx?.DbConn??await DbConnGetter.GetConnAsy(Ct);
+		var DbConnection = DbFnCtx?.DbConn??await DbConnGetter.GetConn(Ct);
 		if(DbConnection is not NpgsqlConnection sqlConn){
 			throw new InvalidOperationException("DbConnection is not NpgsqlConnection");
 		}
@@ -32,7 +32,7 @@ public partial class PostgresCmdMkr
 			R.WithCtx(DbFnCtx);
 		}
 		R.FnsOnDispose.Add(async()=>{
-			return await DbConnGetter.AfterUsingConnAsy(DbConnection, default);
+			return await DbConnGetter.AfterUsingConn(DbConnection, default);
 		});
 		return R;
 	}
@@ -69,7 +69,7 @@ public partial class PostgresCmdMkr
 		if(Ctx.Txn is not null){
 			return Ctx.Txn;
 		}
-		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConnAsy(Ct);
+		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConn(Ct);
 		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
 		Ctx.DbConn = DbConnection;
 		var Tx = DbConnection.BeginTransaction();

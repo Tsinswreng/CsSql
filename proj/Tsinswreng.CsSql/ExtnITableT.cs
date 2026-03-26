@@ -22,6 +22,9 @@ public static partial class ExtnITableT{
 			return t.QtCol<T>(ExprMemb);
 		}
 
+		[Doc(@$"Get the member name of the expression,
+		which is the code col, not mapped to db col.
+		")]
 		public str Memb(Expression<Func<T, obj?>> ExprMemb){
 			var t = (ITable)z;
 			return t.Memb(ExprMemb);

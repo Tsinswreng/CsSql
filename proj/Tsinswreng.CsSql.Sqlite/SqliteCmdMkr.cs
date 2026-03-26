@@ -31,7 +31,7 @@ public partial class SqliteCmdMkr
 		,str Sql
 		,CT Ct
 	){
-		var DbConnection = DbFnCtx?.DbConn?? await DbConnGetter.GetConnAsy(Ct);
+		var DbConnection = DbFnCtx?.DbConn?? await DbConnGetter.GetConn(Ct);
 		if(DbConnection is not SqliteConnection sqlConn){
 			throw new InvalidOperationException("DbConnection is not SqlConnection");
 		}
@@ -43,7 +43,7 @@ public partial class SqliteCmdMkr
 			R.WithCtx(DbFnCtx);
 		}
 		R.FnsOnDispose.Add(async()=>{
-			return await DbConnGetter.AfterUsingConnAsy(DbConnection, default);
+			return await DbConnGetter.AfterUsingConn(DbConnection, default);
 		});
 		return R;
 	}
@@ -87,7 +87,7 @@ public partial class SqliteCmdMkr
 		if(Ctx.Txn is not null){
 			return Ctx.Txn;
 		}
-		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConnAsy(Ct); //事務過後 Ctx會Dispose 故每次開Ctx旹其DbConn必取自DbConnGetter
+		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConn(Ct); //事務過後 Ctx會Dispose 故每次開Ctx旹其DbConn必取自DbConnGetter
 		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
 		Ctx.DbConn = DbConnection;
 		var Tx = DbConnection.BeginTransaction();

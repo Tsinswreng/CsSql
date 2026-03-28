@@ -36,7 +36,6 @@ public abstract partial class BaseSqlCmd<
 		);
 	}
 
-
 	public virtual ISqlCmd AttachCtxTxn(ITxn Txn){
 		if(Txn.RawTxn is not TRawTxn RawTxn){
 			throw new ArgumentException("Txn.RawTxn is not TRawTxn RawTxn");

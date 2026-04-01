@@ -1140,14 +1140,120 @@ Func<
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
-		
+		var Sql = T.SqlSplicer().Select("*").From().Where1()
+		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
+		if(T.SoftDelCol is not null){
+			Sql.And(T.SoftDelCol.FnSqlIsNonDel());
+		}
+		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
+		return dicts.Select(x=>x is not null);
 	}
 	
-	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code")]
-	public Task<IRespBatUpsert> BatUpsert(
+	public async Task<IRespBatUpsert> BatUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	){
-		
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+		var batch = new BatchCollector<TEntity, nil>(async(EntList, Ct)=>{
+			var ids = EntList.Select(x=>(TId)T.GetEntityId(x)!).ToAsyncEnumerable();
+			var existList = BatExistsById(Ctx, ids, Ct);
+			var toInsert = new List<TEntity>();
+			var toUpdate = new List<TEntity>();
+			await foreach(var (i,isExist) in existList.Index()){
+				var ent = EntList[i];
+				if(isExist){
+					toUpdate.Add(ent);
+				}else{
+					toInsert.Add(ent);
+				}
+			}
+			await BatAdd(Ctx, ToolAsyE.ToAsyE(toInsert), Ct);
+			await BatUpd(Ctx, ToolAsyE.ToAsyE(toUpdate), Ct);
+			return NIL;
+		},batchSize);
+		await batch.ConsumeAll(Ents, Ct);
+		return new RespBatUpsert();
+	}
+	
+	Task<IRespBatUpsert> BatUpsertOld(
+		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
+	){
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+
+		async IAsyncEnumerable<TEntity> ToAsyE(IEnumerable<TEntity> src){
+			foreach(var one in src){
+				yield return one;
+			}
+		}
+
+		async IAsyncEnumerable<TId> ToAsyEId(IEnumerable<TId> src){
+			foreach(var one in src){
+				yield return one;
+			}
+		}
+
+		async Task<IList<bool>> ExistsOneBatch(IList<TId> batchIds, CT Ct){
+			if(batchIds.Count == 0){
+				return [];
+			}
+			var ans = new List<bool>(batchIds.Count);
+			await foreach(var one in BatExistsById(Ctx, ToAsyEId(batchIds), Ct).WithCancellation(Ct)){
+				ans.Add(one);
+			}
+			if(ans.Count != batchIds.Count){
+				throw new Exception($"{nameof(BatExistsById)} result count mismatch. Expect={batchIds.Count}, Got={ans.Count}");
+			}
+			return ans;
+		}
+
+		async Task<nil> HandleOneBatch(IList<TEntity> batchEnts, CT Ct){
+			if(batchEnts.Count == 0){
+				return NIL;
+			}
+
+			var ids = new List<TId>(batchEnts.Count);
+			foreach(var ent in batchEnts){
+				var codeDict = T.EntityToCodeDict(ent, typeof(TEntity));
+				if(!codeDict.TryGetValue(T.CodeIdName, out var idObj) || idObj is null){
+					throw new Exception($"Entity id is null or missing. Entity={typeof(TEntity)}, IdField={T.CodeIdName}");
+				}
+				if(idObj is not TId id){
+					throw new Exception($"Entity id type mismatch. Entity={typeof(TEntity)}, IdField={T.CodeIdName}, IdType={idObj.GetType()}, Expected={typeof(TId)}");
+				}
+				ids.Add(id);
+			}
+
+			// Upsert 要以主鍵是否存在為準（包含已軟刪資料），避免插入時主鍵衝突。
+			var existsFlags = await ExistsOneBatch(ids, Ct);
+			var toInsert = new List<TEntity>();
+			var toUpdate = new List<TEntity>();
+			for(i32 i = 0; i < batchEnts.Count; i++){
+				if(existsFlags[i]){
+					toUpdate.Add(batchEnts[i]);
+				}else{
+					toInsert.Add(batchEnts[i]);
+				}
+			}
+
+			if(toInsert.Count > 0){
+				await BatAdd(Ctx, ToAsyE(toInsert), Ct);
+			}
+			if(toUpdate.Count > 0){
+				await BatUpd(Ctx, ToAsyE(toUpdate), Ct);
+			}
+
+			return NIL;
+		}
+
+		return Fn();
+
+		async Task<IRespBatUpsert> Fn(){
+			await using var batch = new BatchCollector<TEntity, nil>(HandleOneBatch, batchSize);
+			await foreach(var ent in Ents.WithCancellation(Ct)){
+				await batch.Add(ent, Ct);
+			}
+			await batch.End(Ct);
+			return new RespBatUpsert();
+		}
 	}
 
 	private async Task<IRespBatUpdAgg> BatUpdAggCore<TAgg>(

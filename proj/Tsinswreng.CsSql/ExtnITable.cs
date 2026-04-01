@@ -77,6 +77,13 @@ public static class ExtnITable {
 			var R = new Field(z, memberName);
 			return R;
 		}
+		
+		public obj? GetEntityId<T>(T Entity){
+			if(z.PropAccessorReg.TryGet(Entity, z.CodeIdName, out var Id)){
+				return Id;
+			}
+			throw new Exception($"{typeof(T)} does not have property {z.CodeIdName}");
+		}
 
 		[Doc($@"
 		#Sum[Create typed SQL splicer]
@@ -254,7 +261,6 @@ public static class ExtnITable {
 				ans[Col.DbName] = vDb;
 			}
 			return ans;
-
 		}
 
 		[Doc($@"

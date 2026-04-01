@@ -40,6 +40,12 @@ public partial interface IRepo<TEntity, TId>{
 		,CT Ct
 	);
 	
+	[Doc(@$"
+	#Examples([
+	fn(ctx, [existingId, nonExistingId, existingId])
+	-> [true, false, true]
+	])
+	")]
 	public IAsyncEnumerable<bool> BatExistsById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct

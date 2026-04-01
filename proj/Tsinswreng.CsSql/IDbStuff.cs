@@ -7,4 +7,7 @@ public interface IDbStuff:I_DbSrcType{
 	
 	[Doc(@$"Database Value Converter")]
 	public IDbValConvtr DbValConvtr{get;set;}
+	
+	[Doc(@$"Batch Option")]
+	public IOptBatch DfltOptBatch{get;set;}
 }

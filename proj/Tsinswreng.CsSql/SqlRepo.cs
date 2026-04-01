@@ -1152,7 +1152,7 @@ Func<
 	public async Task<IRespBatUpsert> BatUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	){
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+		var batchSize = T.DbStuff.DfltOptBatch.DupliSqlBatchSize;
 		var batch = new BatchCollector<TEntity, nil>(async(EntList, Ct)=>{
 			var ids = EntList.Select(x=>(TId)T.GetEntityId(x)!).ToAsyncEnumerable();
 			var existList = BatExistsById(Ctx, ids, Ct);

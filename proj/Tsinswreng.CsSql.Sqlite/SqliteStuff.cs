@@ -7,5 +7,10 @@ public class SqliteStuff:IDbStuff{
 	public ISqlMkr SqlMkr{get;set;} = SqliteSqlMkr.Inst;
 	
 	public IDbValConvtr DbValConvtr{get;set;} = SqliteValConvtr.Inst;
+	public IOptBatch DfltOptBatch{get;set;} = new OptBatch(){
+		// when using sqlite in transaction,
+		// using for loop to exe single prepared statement is faster than duplication Sql
+		DupliSqlBatchSize = 1
+	};
 }
 

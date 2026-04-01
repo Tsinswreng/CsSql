@@ -66,7 +66,7 @@ public partial interface IRepo<TEntity, TId>{
 	so you don't need to provide the entity id independantly.
 	should throw exception if conflict (e.g constraint violation) etc.
 	")]
-	public Task<IRespBatUpd> BatUpdById(
+	public Task<IRespBatUpd> BatUpd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	

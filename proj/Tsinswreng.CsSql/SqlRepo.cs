@@ -523,7 +523,7 @@ Func<
 		return new RespBatInsert();
 	}
 
-	public async Task<IRespBatUpd> BatUpdById(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IRespBatUpd> BatUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
 		if(fieldsToUpdate.Count == 0){
 			return new RespUpd();
@@ -1348,7 +1348,7 @@ Func<
 				return NIL;
 			}
 
-			await BatUpdById(Ctx, ToAsyE(roots), Ct);
+			await BatUpd(Ctx, ToAsyE(roots), Ct);
 
 			foreach(var include in aggReg.Includes){
 				var includeType = include.EntityType;

@@ -39,6 +39,11 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
+	
+	public IAsyncEnumerable<bool> BatExistsById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	);
 
 	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
 	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
@@ -67,6 +72,11 @@ public partial interface IRepo<TEntity, TId>{
 	should throw exception if conflict (e.g constraint violation) etc.
 	")]
 	public Task<IRespBatUpd> BatUpd(
+		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
+	);
+	
+	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code")]
+	public Task<IRespBatUpsert> BatUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
@@ -243,7 +253,16 @@ public class RespBatInsert:IRespBatInsert{}
 public class IRespBatUpd{
 	
 }
+
 public class RespUpd:IRespBatUpd{
+	
+}
+
+public class IRespBatUpsert{
+	
+}
+
+public class RespBatUpsert: IRespBatUpsert{
 	
 }
 

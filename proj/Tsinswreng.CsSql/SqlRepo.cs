@@ -1135,6 +1135,20 @@ Func<
 	){
 		return BatUpdAggCore(Ctx, Agg, true, Ct);
 	}
+	
+	public IAsyncEnumerable<bool> BatExistsById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		
+	}
+	
+	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code")]
+	public Task<IRespBatUpsert> BatUpsert(
+		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
+	){
+		
+	}
 
 	private async Task<IRespBatUpdAgg> BatUpdAggCore<TAgg>(
 		IDbFnCtx Ctx

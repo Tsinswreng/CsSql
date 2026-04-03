@@ -633,6 +633,13 @@ public static class ExtnITable {
 			return R;
 		}
 		
+		public str SqlIsNonDel(){
+			if(z.SoftDelCol is null){
+				throw new InvalidOperationException("Soft delete column is not defined.");
+			}
+			var FieldExpr = z.QtCol(z.SoftDelCol.CodeColName);
+			return $"({FieldExpr} = 0)";
+		}
 		
 		[Doc(@$"Expr that filter non deleted rows
 		you do not need to add 'AND' before it
@@ -643,7 +650,7 @@ public static class ExtnITable {
 			if(z.SoftDelCol is null){
 				return "";
 			}
-			return "AND " + z.SoftDelCol.FnSqlIsNonDel()??"";
+			return "AND " + z.SqlIsNonDel();
 		}
 		
 	}

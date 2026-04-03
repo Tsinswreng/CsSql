@@ -105,6 +105,10 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	public ISqlSplicer<E> Where1(){
 		return AddSeg($"WHERE 1=1");
 	}
+	public ISqlSplicer<E> WhereNonDel(){
+		ITable t = Tbl;
+		return AddSeg("WHERE "+Tbl.SqlIsNonDel());
+	}
 	public ISqlSplicer<E> Where(str Raw){
 		return AddSeg($"WHERE {Raw}");
 	}

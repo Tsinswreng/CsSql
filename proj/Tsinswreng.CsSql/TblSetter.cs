@@ -58,7 +58,7 @@ public class TblSetter<T>:ITblSetter<T>{
 	public FnSetIdx FnSetIdx{get;set;}
 	
 	/// Default implementation for FnSetIdx - pure function that only generates SQL
-	private IList<str> DefaultFnSetIdx(
+	public IList<str> DefaultFnSetIdx(
 		IOptMkIdx? Opt
 		, ITable Tbl
 		, params IEnumerable<str>[] Cols

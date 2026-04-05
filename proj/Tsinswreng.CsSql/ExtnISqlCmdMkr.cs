@@ -181,35 +181,29 @@ public static class ExtnISqlCmdMkr{
 			,CT Ct
 			,Func<IDbFnCtx, Task<TRtn>> Fn
 		){
-			if(Ctx is not null){
-				if(Ctx.Txn is not null){
-					return await Fn(Ctx);
-				}
+			var hasOuterCtx = Ctx is not null;
+			Ctx ??= new DbFnCtx();
+			var hasOuterTxn = Ctx.Txn is not null;
+			if(!hasOuterTxn){
 				await z.EnsureTxn(Ctx, Ct);
-// 					throw new Exception(
-// @$"{nameof(Ctx)} is not null but do not have transaction!
-// Either you pass a {nameof(IDbFnCtx)} with Transaction to `{nameof(Ctx)}`
-// or set {nameof(Ctx)} to `null`.
-// "
-// 					);
 			}
-			Ctx = new DbFnCtx();
-			await z.EnsureTxn(Ctx, Ct);
 			try{
 				var R = await Fn(Ctx);
-				if(Ctx.Txn is not null){
+				if(!hasOuterTxn && Ctx.Txn is not null){
 					await Ctx.Txn.Commit(Ct);
 				}
 				return R;
 			}
-			catch (System.Exception ex){
-				if(Ctx.Txn is not null){
+			catch{
+				if(!hasOuterTxn && Ctx.Txn is not null){
 					await Ctx.Txn.Rollback(Ct);
 				}
 				throw;
 			}
 			finally{
-				await ((IAsyncDisposable)Ctx).DisposeAsync();
+				if(!hasOuterCtx){
+					await ((IAsyncDisposable)Ctx).DisposeAsync();
+				}
 			}
 		}
 		

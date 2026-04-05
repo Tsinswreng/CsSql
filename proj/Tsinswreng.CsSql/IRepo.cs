@@ -11,7 +11,7 @@ provides basic CRUD operations.
 naming rules:
 - Insert -> Add
 - Select -> Get
-- Update -> Upd
+- Update -> Upd  (do not use `Set` because set should map to upsert)
 - Delete -> Del
 
 - NOT support auto increment id for insert operation.

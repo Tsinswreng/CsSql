@@ -166,15 +166,27 @@ public static class ExtnISqlCmdMkr{
 			}
 		}
 		
-		[Doc(@$"Exe function in transaction if {nameof(Ctx)} is null.
-		suitable for making API that don't need the caller to provide {nameof(IDbFnCtx)}
+		[Doc(@$"start transaction and Exe function if {nameof(Ctx)} is null.
+		suitable for making API that don't need the caller to provide {nameof(IDbFnCtx)}.
+		that is, if you call the function(FnA) outside,
+		set {nameof(Ctx)} to null to start transaction,
+		if the function is call by another function(FnB) with {nameof(IDbFnCtx)},
+		pass FnB's Ctx to FnA to combine in one transaction.
 		")]
-		public async Task<TRtn> RunInTxnIfNoCtx<TRtn>(
+		public async Task<TRtn> StartTxnIfNoCtx<TRtn>(
 			IDbFnCtx? Ctx
 			,CT Ct
 			,Func<IDbFnCtx, Task<TRtn>> Fn
 		){
 			if(Ctx is not null){
+				if(Ctx.Txn is null){
+					throw new Exception(
+@$"{nameof(Ctx)} is not null but do not have transaction!
+Either you pass a {nameof(IDbFnCtx)} with Transaction to `{nameof(Ctx)}`
+or set {nameof(Ctx)} to `null`.
+"
+					);
+				}
 				return await Fn(Ctx);
 			}
 			Ctx = new DbFnCtx();

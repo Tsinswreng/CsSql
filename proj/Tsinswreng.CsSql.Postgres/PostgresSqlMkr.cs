@@ -6,6 +6,7 @@ public partial class PostgresSqlMkr
 	protected static PostgresSqlMkr? _Inst = null;
 	public static PostgresSqlMkr Inst => _Inst??= new PostgresSqlMkr();
 	public ISqlTypeMapper SqlTypeMapper{get;set;} = PostgresTypeMapper.Inst;
+	public EDbSrcType DbSrcType => EDbSrcType.Postgres;
 
 	public str Quote(str Name){
 		return "\"" + Name + "\"";
@@ -21,8 +22,14 @@ public partial class PostgresSqlMkr
 		return R;
 	}
 
-	public str ParamLimOfst(str Limit, str Offset){
-		return $"LIMIT {Param(Limit)} OFFSET {Param(Offset)}";
+	public str LimOfst(str? Lim, str? Ofst){
+		var R = "";
+		if(Lim is not null){
+			R += " LIMIT " + Lim + " ";
+		}
+		if(Ofst is not null){
+			R += " OFFSET " + Ofst + " ";
+		}
+		return R;
 	}
-
 }

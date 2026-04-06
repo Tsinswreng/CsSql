@@ -9,13 +9,22 @@ public partial interface ISqlMkr:I_DbSrcType{
 	
 	public IParam Param(str Name);
 
-	public str ParamLimOfst(str Limit, str Offset);
+	[Doc(@$"Raw.
+	if null is passed,
+	there will not be the corresponding conditionin the sql.
+	")]
+	public str LimOfst(str? Lim, str? Ofst);
 
 }
 
 
 public static class ExtnISqlMkr{
-
+	public static str ParamLimOfst(
+		this ISqlMkr z
+		,str Limit, str Offset
+	){
+		return z.LimOfst(z.Param(Limit)+"", z.Param(Offset)+"");
+	}
 	public static str ParamLimOfstStr(
 		this ISqlMkr z
 		,out str Lmt, out str Ofst

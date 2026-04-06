@@ -223,6 +223,11 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		ParamAutoBinders.Add(new SqlArgBinderFactory(ofst, Tbl).One(Qry.Offset_()));
 		return r;
 	}
+	
+	public ISqlSplicer<E> Lim(u64 Limit){
+		var seg = Tbl.SqlMkr.LimOfst(Limit+"", null);
+		return AddSeg(seg);
+	}
 
 	public ISqlSplicer<E> Set(){
 		return AddSeg("SET");

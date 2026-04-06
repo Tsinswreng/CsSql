@@ -20,8 +20,14 @@ public partial class SqliteSqlMkr
 		var R = new Param(Name, SqliteParamPrefix.Inst);
 		return R;
 	}
-
-	public str ParamLimOfst(str Limit, str Offset){
-		return $"LIMIT {Param(Limit)} OFFSET {Param(Offset)}";
+	public str LimOfst(str? Lim, str? Ofst){
+		var R = "";
+		if(Lim is not null){
+			R += " LIMIT " + Lim + " ";
+		}
+		if(Ofst is not null){
+			R += " OFFSET " + Ofst + " ";
+		}
+		return R;
 	}
 }

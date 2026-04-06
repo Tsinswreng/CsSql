@@ -12,6 +12,8 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	public ITable Tbl{get;set;}
 	public IList<obj> Segs{get;set;} = [];
 	public IList<IParamAutoBinder> ParamAutoBinders { get; set; } = [];
+	public IDictionary<object, object> SharedManyCtx { get; set; }
+		= new Dictionary<object, object>(new RefEqComparer());
 
 
 	//變 實體
@@ -167,7 +169,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		,Func<SqlArgBinderFactory, IParamAutoBinder> Bind
 	){
 		Bool(CodeCol, Op, out var param);
-		var binder = Bind(new SqlArgBinderFactory(param, Tbl, CodeCol));
+		var binder = Bind(new SqlArgBinderFactory(param, Tbl, CodeCol, SharedManyCtx));
 		ParamAutoBinders.Add(binder);
 		return this;
 	}
@@ -177,7 +179,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	){
 		var memb = Memb(GetMember);
 		AndEq(GetMember, out var param);
-		var binder = Bind(new SqlArgBinderFactory(param, Tbl, memb));
+		var binder = Bind(new SqlArgBinderFactory(param, Tbl, memb, SharedManyCtx));
 		ParamAutoBinders.Add(binder);
 		return this;
 	}
@@ -187,7 +189,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		Func<SqlArgBinderFactory, IParamAutoBinder> Bind
 	){
 		var r = And().Bool(CodeCol, "=", out var param);
-		var binder = Bind(new SqlArgBinderFactory(param, Tbl, CodeCol));
+		var binder = Bind(new SqlArgBinderFactory(param, Tbl, CodeCol, SharedManyCtx));
 		ParamAutoBinders.Add(binder);
 		return r;
 	}

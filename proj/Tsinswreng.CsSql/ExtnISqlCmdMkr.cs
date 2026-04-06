@@ -218,9 +218,18 @@ public static class ExtnISqlCmdMkr{
 			,CT Ct
 		)where T: new()
 		{
-			var asyE = z.RunDupliSql(Ctx, Sql, Ct);
-			var r = asyE.Where(x=>x is not null).Select(x=>Tbl.DbDictToEntity(x));
-			return r;
+			return Impl(Ct);
+			
+			// Keep null placeholders to preserve 1:1 positional alignment with input args.
+			async IAsyncEnumerable<T?> Impl([EnumeratorCancellation] CT Ct2){
+				await foreach(var row in z.RunDupliSql(Ctx, Sql, Ct2).WithCancellation(Ct2)){
+					if(row is null){
+						yield return default;
+						continue;
+					}
+					yield return Tbl.DbDictToEntity(row);
+				}
+			}
 		}
 		
 		

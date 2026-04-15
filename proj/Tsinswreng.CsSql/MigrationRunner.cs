@@ -27,7 +27,7 @@ public class MigrationRunner{
 		,IRepo<SchemaHistory, i64> RepoSchemaHistory
 		,TxnWrapper TxnWrapper
 	){
-		this.RepoSchemaHistory = RepoSchemaHistory.UseSqlHelperStrAcc();
+		this.RepoSchemaHistory = RepoSchemaHistory.UseCsSqlSrefl();
 		this.MigrationMgr = MigrationMgr;
 		this.SqlCmdMkr = SqlCmdMkr;
 		this.MkrTxn = MkrTxn;

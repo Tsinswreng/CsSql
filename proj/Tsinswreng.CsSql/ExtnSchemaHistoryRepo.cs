@@ -14,7 +14,7 @@ public static class ExtnSchemaHistoryRepo{
 		///
 		/// 若調用方註冊的不是 `SqlRepo<SchemaHistory, i64>`，直接拋異常，
 		/// 以便盡早暴露配置錯誤。
-		public IRepo<SchemaHistory, i64> UseSqlHelperStrAcc(){
+		public IRepo<SchemaHistory, i64> UseCsSqlSrefl(){
 			if(z is not SqlRepo<SchemaHistory, i64> SqlRepoSchemaHistory){
 				throw new ArgumentException("RepoSchemaHistory must be SqlRepo<SchemaHistory, i64>");
 			}

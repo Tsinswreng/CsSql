@@ -711,6 +711,7 @@ var SqlCmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
 	// 		: $"AND {Tbl.SqlIsNonDel()}";
 	// }
 
+	[Obsolete]
 	public async Task<Func<
 		IList<TVal>
 		,CT

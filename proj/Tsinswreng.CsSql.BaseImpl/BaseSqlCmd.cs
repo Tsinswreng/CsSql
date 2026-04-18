@@ -53,33 +53,6 @@ public abstract partial class BaseSqlCmd<
 			}
 			AttachCtxTxn(Ctx.Txn);
 		}
-/* 
-廢棄代碼:
-		try{
-			var RawReader = await RawCmd.ExecuteReaderAsync(Ct);
-			return new BaseResultReader(
-				this
-				,RawCmd
-				,RawReader
-				,DbValConvtr
-			);
-		}
-		catch(InvalidOperationException ex) when(
-			ex.Message.Contains(
-				"transaction object is not associated with the same connection object as this command",
-				StringComparison.OrdinalIgnoreCase
-			)
-		){
-			RawCmd.Transaction = null;
-			var RawReader = await RawCmd.ExecuteReaderAsync(Ct);
-			return new BaseResultReader(
-				this
-				,RawCmd
-				,RawReader
-				,DbValConvtr
-			);
-		}
- */
 		return this;
 	}
 

@@ -6,6 +6,18 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 
 public static class ExtnISqlCmdMkr{
+	private static bool IsTxnCompletedException(Exception ex){
+		return ex is InvalidOperationException && ex.Message.Contains("completed", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static async Task TryRollbackSafely(ITxn txn, CT ct){
+		try{
+			await txn.Rollback(ct);
+		}catch(Exception ex) when(IsTxnCompletedException(ex)){
+			// transaction already completed; ignore rollback
+		}
+	}
+
 	private static (
 		IList<IParamAutoBinderMulti> ManyBinders,
 		IList<IParamAutoBinderMultiAsy> ManyAsyncBinders,
@@ -157,7 +169,7 @@ public static class ExtnISqlCmdMkr{
 			}
 			catch (System.Exception ex){
 				if(Ctx.Txn is not null){
-					await Ctx.Txn.Rollback(Ct);
+					await TryRollbackSafely(Ctx.Txn, Ct);
 				}
 				throw;
 			}
@@ -197,7 +209,7 @@ public static class ExtnISqlCmdMkr{
 			}
 			catch{
 				if(!hasOuterTxn && Ctx.Txn is not null){
-					await Ctx.Txn.Rollback(Ct);
+					await TryRollbackSafely(Ctx.Txn, Ct);
 				}
 				throw;
 			}

@@ -20,6 +20,7 @@ public partial class PostgresCmdMkr
 		,str Sql
 		,CT Ct
 	){
+		var hasCtxConn = DbFnCtx?.DbConn is not null;
 		var DbConnection = DbFnCtx?.DbConn??await DbConnGetter.GetConn(Ct);
 		if(DbConnection is not NpgsqlConnection sqlConn){
 			throw new InvalidOperationException("DbConnection is not NpgsqlConnection");
@@ -31,9 +32,11 @@ public partial class PostgresCmdMkr
 		if(DbFnCtx!= null){
 			R.WithCtx(DbFnCtx);
 		}
-		R.FnsOnDispose.Add(async()=>{
-			return await DbConnGetter.AfterUsingConn(DbConnection, default);
-		});
+		if(!hasCtxConn){
+			R.FnsOnDispose.Add(async()=>{
+				return await DbConnGetter.AfterUsingConn(DbConnection, default);
+			});
+		}
 		return R;
 	}
 

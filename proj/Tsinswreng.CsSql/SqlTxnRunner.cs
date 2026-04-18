@@ -7,6 +7,9 @@ public partial class AdoTxnRunner(
 	//:IRunInTxn
 	:ITxnRunner
 {
+	static bool IsTxnCompletedException(Exception ex){
+		return ex is InvalidOperationException && ex.Message.Contains("completed", StringComparison.OrdinalIgnoreCase);
+	}
 
 	[Impl]
 	public async Task<TRet> RunTxn<TRet>(
@@ -27,7 +30,11 @@ public partial class AdoTxnRunner(
 			return R;
 		}
 		catch (Exception) {
-			await Txn.Rollback(Ct);
+			try{
+				await Txn.Rollback(Ct);
+			}catch(Exception ex) when(IsTxnCompletedException(ex)){
+				// transaction already completed; ignore rollback
+			}
 			throw;
 		}
 

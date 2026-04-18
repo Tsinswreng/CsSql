@@ -31,6 +31,7 @@ public partial class SqliteCmdMkr
 		,str Sql
 		,CT Ct
 	){
+		var hasCtxConn = DbFnCtx?.DbConn is not null;
 		var DbConnection = DbFnCtx?.DbConn?? await DbConnGetter.GetConn(Ct);
 		if(DbConnection is not SqliteConnection sqlConn){
 			throw new InvalidOperationException("DbConnection is not SqlConnection");
@@ -45,9 +46,11 @@ public partial class SqliteCmdMkr
 		if(DbFnCtx != null){
 			R.WithCtx(DbFnCtx);
 		}
-		R.FnsOnDispose.Add(async()=>{
-			return await DbConnGetter.AfterUsingConn(DbConnection, default);
-		});
+		if(!hasCtxConn){
+			R.FnsOnDispose.Add(async()=>{
+				return await DbConnGetter.AfterUsingConn(DbConnection, default);
+			});
+		}
 		return R;
 	}
 

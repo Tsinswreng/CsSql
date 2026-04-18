@@ -87,13 +87,26 @@ public static class ExtnISqlCmdMkr{
 		IList<IList> batches
 	){
 		var args = ArgDict.Mk();
-		foreach(var binder in oneBinders){
-			binder.Bind(args);
-		}
+		var repeatCnt = batches.Count == 0 ? 0ul : (u64)batches[0].Count;
+		BindOneBinders(args, oneBinders, repeatCnt);
 		for(var i=0; i<manyBinders.Count; i++){
 			manyBinders[i].BindBatch(args, batches[i]);
 		}
 		return args;
+	}
+
+	private static void BindOneBinders(
+		IArgDict args,
+		IList<IParamAutoBinder> oneBinders,
+		u64 repeatCnt
+	){
+		foreach(var binder in oneBinders){
+			if(binder is IParamAutoBinderOneBatch oneBatch){
+				oneBatch.BindBatch(args, repeatCnt == 0 ? 1ul : repeatCnt);
+			}else{
+				binder.Bind(args);
+			}
+		}
 	}
 
 	private static bool TryTakeAlignedBatches(
@@ -373,9 +386,7 @@ public static class ExtnISqlCmdMkr{
 
 					// 绑定参数
 					var args = ArgDict.Mk();
-					foreach(var binder in oneBinders){
-						binder.Bind(args);
-					}
+					BindOneBinders(args, oneBinders, cnt);
 					for(var i = 0; i < manyAsyncBinders.Count; i++){
 						manyAsyncBinders[i].BindBatch(args, asyncBatches[i]);
 					}

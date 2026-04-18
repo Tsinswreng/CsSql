@@ -11,6 +11,16 @@ public interface IParamAutoBinder{
 	public void Bind(IArgDict Args);
 }
 
+/// Binder for one fixed value that can be repeated for duplicated SQL batches.
+public interface IParamAutoBinderOneBatch: IParamAutoBinder{
+	[Doc(@$"
+#Sum[Bind one fixed value for each duplicated SQL statement in current batch]
+#Params([Argument dictionary],[Duplicated statement count])
+#Rtn[Void]
+")]
+	public void BindBatch(IArgDict Args, u64 RepeatCnt);
+}
+
 /// Binder for "Many(values)" that can stream values by batch size.
 public interface IParamAutoBinderMulti: IParamAutoBinder{
 	[Doc(@$"

@@ -32,6 +32,9 @@ public class BaseResultReader : IResultReader{
 		DbDataReader Reader = RawReader;
 		try{
 			Dl.Add(Reader);
+			if(Cmd is IDisposable disposableCmd){
+				Dl.Add(disposableCmd);
+			}
 		}
 		catch (System.Exception e){
 			// 原代码的异常封装逻辑，一行不改

@@ -182,6 +182,7 @@ public static class ExtnISqlCmdMkr{
 			,Func<IDbFnCtx, Task<TRtn>> Fn
 		){
 			var hasOuterCtx = Ctx is not null;
+			var hasOuterConn = Ctx?.DbConn is not null;
 			Ctx ??= new DbFnCtx();
 			var hasOuterTxn = Ctx.Txn is not null;
 			if(!hasOuterTxn){
@@ -201,7 +202,7 @@ public static class ExtnISqlCmdMkr{
 				throw;
 			}
 			finally{
-				if(!hasOuterCtx){
+				if(!hasOuterCtx || (!hasOuterTxn && !hasOuterConn)){
 					await ((IAsyncDisposable)Ctx).DisposeAsync();
 				}
 			}

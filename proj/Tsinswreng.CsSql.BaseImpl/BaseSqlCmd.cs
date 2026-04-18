@@ -21,6 +21,7 @@ public abstract partial class BaseSqlCmd<
 	public IList<Func<Task<nil>>> FnsOnDispose{get;set;} = new List<Func<Task<nil>>>();
 	public str? Sql{get;set;}
 	public abstract IDbValConvtr DbValConvtr{get;protected set;}
+	protected bool _Disposed = false;
 	public BaseSqlCmd(TRawCmd DbCmd){
 		RawCmd = DbCmd;
 	}
@@ -113,12 +114,35 @@ public abstract partial class BaseSqlCmd<
 		return DbValConvtr.ToDbVal(CodeVal);
 	}
 
-	public void Dispose(){
-		RawCmd.Dispose();
+	protected async Task<nil> RunFnsOnDispose(){
+		foreach(var fn in FnsOnDispose){
+			await fn();
+		}
+		FnsOnDispose.Clear();
+		return NIL;
 	}
 
-	public ValueTask DisposeAsync() {
-		RawCmd.Dispose();
-		return default;
+	public void Dispose(){
+		if(_Disposed){
+			return;
+		}
+		_Disposed = true;
+		try{
+			RunFnsOnDispose().GetAwaiter().GetResult();
+		}finally{
+			RawCmd.Dispose();
+		}
+	}
+
+	public async ValueTask DisposeAsync() {
+		if(_Disposed){
+			return;
+		}
+		_Disposed = true;
+		try{
+			await RunFnsOnDispose();
+		}finally{
+			RawCmd.Dispose();
+		}
 	}
 }

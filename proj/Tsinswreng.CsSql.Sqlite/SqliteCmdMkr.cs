@@ -35,6 +35,9 @@ public partial class SqliteCmdMkr
 		if(DbConnection is not SqliteConnection sqlConn){
 			throw new InvalidOperationException("DbConnection is not SqlConnection");
 		}
+		if(sqlConn.State != System.Data.ConnectionState.Open){
+			await sqlConn.OpenAsync(Ct);
+		}
 		var RawCmd = sqlConn.CreateCommand();
 		RawCmd.CommandText = Sql;
 		var R = new SqliteCmd(RawCmd);
@@ -54,6 +57,9 @@ public partial class SqliteCmdMkr
 			throw new InvalidOperationException("ISqlCmd is not SqliteCmd");
 		}
 		try{
+			if(SqlCmd.RawCmd.Connection?.State != System.Data.ConnectionState.Open){
+				await SqlCmd.RawCmd.Connection!.OpenAsync(Ct);
+			}
 			SqlCmd.RawCmd.Prepare();
 			return Cmd;
 		}
@@ -88,6 +94,9 @@ public partial class SqliteCmdMkr
 			return Ctx.Txn;
 		}
 		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConn(Ct); //事務過後 Ctx會Dispose 故每次開Ctx旹其DbConn必取自DbConnGetter
+		if(DbConnection is SqliteConnection sqlConn && sqlConn.State != System.Data.ConnectionState.Open){
+			await sqlConn.OpenAsync(Ct);
+		}
 		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
 		Ctx.DbConn = DbConnection;
 		var Tx = DbConnection.BeginTransaction();

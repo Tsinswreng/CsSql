@@ -23,13 +23,31 @@ public partial interface IDbFnCtx
 	= 1;
 #endif
 	async ValueTask IAsyncDisposable.DisposeAsync(){
-		if(ObjsToDispose == null){return;}
-		foreach(var obj in ObjsToDispose){
-			if(obj is IAsyncDisposable DispAsy){
-				await DispAsy.DisposeAsync();
-			}else if(obj is IDisposable Disp){
-				Disp.Dispose();
+		if(ObjsToDispose != null){
+			foreach(var obj in ObjsToDispose){
+				if(obj is IAsyncDisposable DispAsy){
+					await DispAsy.DisposeAsync();
+				}else if(obj is IDisposable Disp){
+					Disp.Dispose();
+				}
 			}
+			ObjsToDispose.Clear();
+		}
+
+		if(Txn is IDisposable txn){
+			txn.Dispose();
+			Txn = null;
+		}
+
+		if(DbConn is IDbConnection dbConn){
+			try{
+				dbConn.Close();
+			}catch{
+				if(dbConn is IDisposable disp){
+					disp.Dispose();
+				}
+			}
+			DbConn = null;
 		}
 	}
 }

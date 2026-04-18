@@ -11,7 +11,7 @@ using Ngaq.Core.Model;
 using Ngaq.Core.Model.Po;
 using Tsinswreng.CsSql;
 
-namespace Ngaq.Local.Db;
+namespace Ngaq.Backend.Db;
 //using T = Bo_Word;
 
 using DbCtx = DbContext;

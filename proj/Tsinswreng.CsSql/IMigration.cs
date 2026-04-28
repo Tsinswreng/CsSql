@@ -67,9 +67,18 @@ public class SqlMigration
 
 	async Task<nil> RunSql(IDbFnCtx Ctx, str Sql, CT Ct){
 		//IBaseDbFnCtx Ctx = new BaseDbFnCtx();
-		var Cmd = await SqlCmdMkr.MkCmd(Ctx, Sql, Ct);
-		await Cmd.All1d(Ct);
-		return NIL;
+		try{
+			var Cmd = await SqlCmdMkr.MkCmd(Ctx, Sql, Ct);
+			await Cmd.All1d(Ct);
+			return NIL;
+		}catch(Exception ex){
+			throw new MigrationExecutionException(
+				message: "Migration SQL execution failed."
+				,innerException: ex
+				,migrationCreatedMs: CreatedMs
+				,sqlText: Sql
+			);
+		}
 	}
 
 	[Impl(typeof(IMigration))]

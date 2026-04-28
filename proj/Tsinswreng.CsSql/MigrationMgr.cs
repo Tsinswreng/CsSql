@@ -109,21 +109,38 @@ ORDER BY {T.QtCol(PCreatedMs)} DESC
 		// 這裏沿用現有 repo 舊 API，因爲遷移場景需要在建表/升級同一上下文內立即寫歷史表。
 		var InsertHistory = await RepoHistory.FnInsertManyNoPrepare(Ctx, Ct);
 		foreach(var Info in Undeployed){
-			// 把純遷移描述轉成可執行遷移對象。
-			var Migration = SqlMigration.MkSqlMigration(
-				SqlCmdMkr: SqlCmdMkr
-				,MkrTxn: MkrTxn
-				,SqlMigrationInfo: Info
-			);
-			var FnUp = await Migration.FnUpAsy(Ctx, Ct);
-			await FnUp(Ct);
-			// 只有 Up 成功後才記錄歷史，避免「記錄成功但實際未執行」的不一致。
-			var History = new SchemaHistory{
-				Id = Info.CreatedMs
-				,CreatedMs = Info.CreatedMs
-				,Name = Info.GetType().Name
-			};
-			await InsertHistory([History], Ct);
+			try{
+				// 把純遷移描述轉成可執行遷移對象。
+				var Migration = SqlMigration.MkSqlMigration(
+					SqlCmdMkr: SqlCmdMkr
+					,MkrTxn: MkrTxn
+					,SqlMigrationInfo: Info
+				);
+				var FnUp = await Migration.FnUpAsy(Ctx, Ct);
+				await FnUp(Ct);
+				// 只有 Up 成功後才記錄歷史，避免「記錄成功但實際未執行」的不一致。
+				var History = new SchemaHistory{
+					Id = Info.CreatedMs
+					,CreatedMs = Info.CreatedMs
+					,Name = Info.GetType().Name
+				};
+				await InsertHistory([History], Ct);
+			}catch(MigrationExecutionException ex){
+				throw new MigrationExecutionException(
+					message: $"Migration execution failed: {Info.GetType().Name} ({Info.CreatedMs})."
+					,innerException: ex
+					,migrationName: Info.GetType().Name
+					,migrationCreatedMs: Info.CreatedMs
+					,sqlText: ex.SqlText
+				);
+			}catch(Exception ex){
+				throw new MigrationExecutionException(
+					message: $"Migration execution failed: {Info.GetType().Name} ({Info.CreatedMs})."
+					,innerException: ex
+					,migrationName: Info.GetType().Name
+					,migrationCreatedMs: Info.CreatedMs
+				);
+			}
 		}
 		return NIL;
 	}

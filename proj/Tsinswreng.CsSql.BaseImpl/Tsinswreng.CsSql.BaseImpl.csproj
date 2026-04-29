@@ -7,7 +7,6 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="../Tsinswreng.CsSql/Tsinswreng.CsSql.csproj" />
-		<PackageReference Include="SQLite" Version="3.13.0" />
 		<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5" />
 	</ItemGroup>
 

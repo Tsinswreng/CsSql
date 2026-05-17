@@ -18,7 +18,7 @@ public static class ExtnSchemaHistoryRepo{
 			if(z is not SqlRepo<SchemaHistory, i64> SqlRepoSchemaHistory){
 				throw new ArgumentException("RepoSchemaHistory must be SqlRepo<SchemaHistory, i64>");
 			}
-			SqlRepoSchemaHistory.PropAccessorReg = SqlHelperStrAcc.Inst;
+			SqlRepoSchemaHistory.PropAccessorReg = CsSqlStrAcc.Inst;
 			return z;
 		}
 	}

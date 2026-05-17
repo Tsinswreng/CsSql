@@ -18,16 +18,16 @@ public partial class SchemaHistory{
 
 
 
-[StrAccType(typeof(SchemaHistory))]
-public partial class SqlHelperStrAcc{
-	protected static SqlHelperStrAcc? _Inst = null;
-	public static SqlHelperStrAcc Inst => _Inst??= new SqlHelperStrAcc();
+[SreflType(typeof(SchemaHistory))]
+public partial class CsSqlStrAcc{
+	protected static CsSqlStrAcc? _Inst = null;
+	public static CsSqlStrAcc Inst => _Inst??= new CsSqlStrAcc();
 }
 
 public partial class SchemaHistoryTblMkr{
 	public str TblName = "__TsinswrengSchemaHistory";
 	public ITable MkTbl(){
-		ITable R = Table.Mk<SchemaHistory>(SqlHelperStrAcc.Inst, TblName);
+		ITable R = Table.Mk<SchemaHistory>(CsSqlStrAcc.Inst, TblName);
 		R.Col(nameof(SchemaHistory.Id)).AdditionalSqls(["PRIMARY KEY"]);
 		return R;
 	}

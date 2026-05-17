@@ -32,9 +32,7 @@
 	</ItemGroup> -->
 	<ItemGroup>
 		<PackageReference Include="Tsinswreng.Srefl" Version="1.0.2-alpha" />
-		<PackageReference Include="Tsinswreng.Srefl.SrcGen" Version="1.0.2-alpha"
-			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
-		/>
+		<PackageReference Include="Tsinswreng.Srefl.SrcGen" Version="1.0.5-alpha" />
 	</ItemGroup>
 	<ItemGroup>
 		<!-- <ProjectReference Include="../../../Tsinswreng.CsCore/proj/Tsinswreng.CsCore/Tsinswreng.CsCore.csproj" /> -->

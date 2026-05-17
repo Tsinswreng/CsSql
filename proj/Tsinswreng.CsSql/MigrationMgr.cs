@@ -75,7 +75,7 @@ ORDER BY {T.QtCol(PCreatedMs)} DESC
 	/// - CreatedMs 越大表示越新的遷移
 	/// - 所有遷移均只允許向前追加，不允許覆蓋舊遷移
 	IList<ISqlMigrationInfo> GetUndeployedInfos(
-		[See(nameof(ISqlMigrationInfo.CreatedMs))]
+		[Doc(@$"#See({nameof(ISqlMigrationInfo.CreatedMs)})")]
 		i64 LastCreatedMs
 	){
 		var Undeployed = new List<ISqlMigrationInfo>();

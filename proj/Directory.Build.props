@@ -18,12 +18,12 @@
 		<Compile Include="../TypeAlias.cs"/>
 	</ItemGroup>
 
-	<ItemGroup>
+	<!-- <ItemGroup>
 		<ProjectReference Include="../../../Tsinswreng.Srefl/proj/Tsinswreng.Srefl.SrcGen/Tsinswreng.Srefl.SrcGen.csproj"
 			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
 		/>
 		<ProjectReference Include="../../../Tsinswreng.Srefl/proj/Tsinswreng.Srefl/Tsinswreng.Srefl.csproj" />
-	</ItemGroup>
+	</ItemGroup> -->
 	<!-- <ItemGroup>
 		<ProjectReference Include="../../../Tsinswreng.CsDictMapper/proj/Tsinswreng.CsDictMapper.SrcGen/Tsinswreng.CsDictMapper.SrcGen.csproj"
 			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
@@ -31,9 +31,19 @@
 		<ProjectReference Include="../../../Tsinswreng.CsDictMapper/proj/Tsinswreng.CsDictMapper/Tsinswreng.CsDictMapper.csproj" />
 	</ItemGroup> -->
 	<ItemGroup>
-		<ProjectReference Include="../../../Tsinswreng.CsCore/proj/Tsinswreng.CsCore/Tsinswreng.CsCore.csproj" />
-		<ProjectReference Include="../../../Tsinswreng.CsTools/proj/Tsinswreng.CsTools/Tsinswreng.CsTools.csproj" />
-		<ProjectReference Include="../../../Tsinswreng.CsPage/proj/Tsinswreng.CsPage/Tsinswreng.CsPage.csproj" />
+		<PackageReference Include="Tsinswreng.Srefl" Version="1.0.2-alpha" />
+		<PackageReference Include="Tsinswreng.Srefl.SrcGen" Version="1.0.2-alpha"
+			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+		/>
+	</ItemGroup>
+	<ItemGroup>
+		<!-- <ProjectReference Include="../../../Tsinswreng.CsCore/proj/Tsinswreng.CsCore/Tsinswreng.CsCore.csproj" /> -->
+		<PackageReference Include="Tsinswreng.CsCore" Version="0.0.1-alpha" />
+		<PackageReference Include="Tsinswreng.CsU128Id" Version="0.0.1-alpha" />
+		<PackageReference Include="Tsinswreng.CsTools" Version="0.0.1-alpha" />
+		<!-- <ProjectReference Include="../../../Tsinswreng.CsTools/proj/Tsinswreng.CsTools/Tsinswreng.CsTools.csproj" /> -->
+		<!-- <ProjectReference Include="../../../Tsinswreng.CsPage/proj/Tsinswreng.CsPage/Tsinswreng.CsPage.csproj" /> -->
+		<PackageReference Include="Tsinswreng.CsPage" Version="0.0.1-alpha" />
 	</ItemGroup>
 
 	<!-- <ItemGroup>

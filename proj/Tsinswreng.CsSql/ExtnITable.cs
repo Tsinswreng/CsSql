@@ -7,6 +7,8 @@ using Tsinswreng.Srefl;
 using Tsinswreng.CsTools;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
+using Tsinswreng.CsU128Id;
+
 public static class ExtnITable {
 	extension(ITable z) {
 		[Doc($@"
@@ -135,8 +137,8 @@ public static class ExtnITable {
 		")]
 		public IParam Prm() {
 			var bytes = Ulid.NewUlid().ToByteArray();
-			var id = ToolUInt128.ByteArrToUInt128(bytes);
-			var Name = ToolUInt128.ToLow64Base(id);
+			var id = ToolU128Id.ByteArrToUInt128(bytes);
+			var Name = ToolU128Id.ToLow64Base(id);
 			return z.SqlMkr.Param("_" + Name);
 		}
 

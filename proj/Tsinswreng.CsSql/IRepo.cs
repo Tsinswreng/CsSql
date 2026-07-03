@@ -20,6 +20,7 @@ naming rules:
 
 for `Get` operation, defaultly
 soft deleted data are not included.
+only `Get` operation have counterpart of `GetXxx` and `GetXxxWithDel`
 ")]
 public partial interface IRepo<TEntity, TId>{
 	public IAsyncEnumerable<TEntity?> GetManyInId(
@@ -50,6 +51,12 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
+	
+	public IAsyncEnumerable<bool> BatExistsByIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	);
+	
 
 	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
 	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
@@ -81,7 +88,10 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
-	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code")]
+	
+	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code.
+	soft deleted rows are included to determine whether the data exists or not.
+	")]
 	public Task<IRespBatUpsert> BatUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);

@@ -329,14 +329,14 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return Fn(Run());
 	}
 	
-	public IAsyncEnumerable<TEntity?> GetManyInId(
+	public IAsyncEnumerable<TEntity?> GetInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
 		return GetManyInIdCore(Ctx, Ids, false, Ct);
 	}
 
-	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
+	public IAsyncEnumerable<TEntity?> GetInIdsWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -355,14 +355,14 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return GetManyInIdCore(Ctx, ToAsyE(), false, Ct);
 	}
 
-	public IAsyncEnumerable<TEntity?> BatGetById(
+	public IAsyncEnumerable<TEntity?> OrdGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
 		return BatGetByIdCore(Ctx, Ids, false, Ct);
 	}
 
-	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
+	public IAsyncEnumerable<TEntity?> OrdGetByIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -393,7 +393,7 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return GetAllAggCore<TAgg>(Ctx, true, Ct);
 	}
 
-	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
+	public IAsyncEnumerable<TAgg?> OrdGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)
@@ -402,7 +402,7 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return BatGetAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
 	}
 
-	public IAsyncEnumerable<TAgg?> BatGetAggByIdWithDel<TAgg>(
+	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)
@@ -474,7 +474,7 @@ Func<
 		return await fn(Tbl, FnMemb, Keys, Ct);
 	}
 
-	public async Task<IRespBatInsert> BatAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var Cols = T.Columns.Keys.ToList();
 		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
@@ -523,7 +523,7 @@ Func<
 		return new RespBatInsert();
 	}
 
-	public async Task<IRespBatUpd> BatUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
 		if(fieldsToUpdate.Count == 0){
 			return new RespUpd();
@@ -579,7 +579,7 @@ Func<
 		return new RespUpd();
 	}
 
-	public async Task<IRespBatUpd> BatUpdByDbDict(
+	public async Task<IRespBatUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -655,14 +655,14 @@ Func<
 		return new RespUpd();
 	}
 	
-	public Task<IRespBatUpd> BatUpdByCodeDict(
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
 		,CT Ct
 	){
 		var DbDicts = Dicts.Select(x=>T.ToDbDict(x));
-		return BatUpdByDbDict(Ctx, Ids, DbDicts, Ct);
+		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
 	}
 
 	public async Task<ISoftDelInId> SoftDelInId(
@@ -747,7 +747,7 @@ Func<
 		return new HardDelInId();
 	}
 
-	public async Task<IBatSoftDel> BatSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+	public async Task<IBatSoftDel> OrdSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
@@ -793,7 +793,7 @@ Func<
 		return new BatSoftDel();
 	}
 
-	public async Task<IBatHardDel> BatHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
 
@@ -832,7 +832,7 @@ Func<
 		return new BatHardDel();
 	}
 
-	public async Task<IRespBatAddAgg> BatAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+	public async Task<IRespBatAddAgg> OrdAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
 			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
@@ -1124,38 +1124,48 @@ Func<
 		return new RespSoftDelAggInId();
 	}
 	
-	public Task<IRespBatUpdAgg> BatHardUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdHardUpdAgg<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, false, Ct);
 	}
 
-	public Task<IRespBatUpdAgg> BatSoftUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, true, Ct);
 	}
 	
-	public IAsyncEnumerable<bool> BatExistsById(
+	private IAsyncEnumerable<bool> BatExistsByIdCore(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,bool WithDel
 		,CT Ct
 	){
 		var Sql = T.SqlSplicer().Select("*").From().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
-		if(T.SoftDelCol is not null){
+		if(!WithDel && T.SoftDelCol is not null){
 			Sql.And(T.SoftDelCol.FnSqlIsNonDel());
 		}
 		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
 		return dicts.Select(x=>x is not null);
 	}
+
+	public IAsyncEnumerable<bool> OrdExistsById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return BatExistsByIdCore(Ctx, Ids, false, Ct);
+	}
 	
-	public async Task<IRespBatUpsert> BatUpsert(
+	public async Task<IRespBatUpsert> OrdUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	){
 		var batchSize = T.DbStuff.DfltOptBatch.DupliSqlBatchSize;
 		var batch = new BatchCollector<TEntity, nil>(async(EntList, Ct)=>{
 			var ids = EntList.Select(x=>(TId)T.GetEntityId(x)!).ToAsyncEnumerable();
-			var existList = BatExistsById(Ctx, ids, Ct);
+			// Upsert 以主鍵是否已存在為準，軟刪行也必須算存在。
+			// 否則同 Id 的軟刪資料會被誤判為「需插入」，最終撞上主鍵唯一約束。
+			var existList = BatExistsByIdCore(Ctx, ids, true, Ct);
 			var toInsert = new List<TEntity>();
 			var toUpdate = new List<TEntity>();
 			await foreach(var (i,isExist) in existList.Index()){
@@ -1166,8 +1176,8 @@ Func<
 					toInsert.Add(ent);
 				}
 			}
-			await BatAdd(Ctx, ToolAsyE.ToAsyE(toInsert), Ct);
-			await BatUpd(Ctx, ToolAsyE.ToAsyE(toUpdate), Ct);
+			await OrdAdd(Ctx, ToolAsyE.ToAsyE(toInsert), Ct);
+			await OrdUpd(Ctx, ToolAsyE.ToAsyE(toUpdate), Ct);
 			return NIL;
 		},batchSize);
 		await batch.ConsumeAll(Ents, Ct);
@@ -1196,11 +1206,11 @@ Func<
 				return [];
 			}
 			var ans = new List<bool>(batchIds.Count);
-			await foreach(var one in BatExistsById(Ctx, ToAsyEId(batchIds), Ct).WithCancellation(Ct)){
+			await foreach(var one in OrdExistsById(Ctx, ToAsyEId(batchIds), Ct).WithCancellation(Ct)){
 				ans.Add(one);
 			}
 			if(ans.Count != batchIds.Count){
-				throw new Exception($"{nameof(BatExistsById)} result count mismatch. Expect={batchIds.Count}, Got={ans.Count}");
+				throw new Exception($"{nameof(OrdExistsById)} result count mismatch. Expect={batchIds.Count}, Got={ans.Count}");
 			}
 			return ans;
 		}
@@ -1235,10 +1245,10 @@ Func<
 			}
 
 			if(toInsert.Count > 0){
-				await BatAdd(Ctx, ToAsyE(toInsert), Ct);
+				await OrdAdd(Ctx, ToAsyE(toInsert), Ct);
 			}
 			if(toUpdate.Count > 0){
-				await BatUpd(Ctx, ToAsyE(toUpdate), Ct);
+				await OrdUpd(Ctx, ToAsyE(toUpdate), Ct);
 			}
 
 			return NIL;
@@ -1468,7 +1478,7 @@ Func<
 				return NIL;
 			}
 
-			await BatUpd(Ctx, ToAsyE(roots), Ct);
+			await OrdUpd(Ctx, ToAsyE(roots), Ct);
 
 			foreach(var include in aggReg.Includes){
 				var includeType = include.EntityType;

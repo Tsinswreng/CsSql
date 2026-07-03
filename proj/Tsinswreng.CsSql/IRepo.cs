@@ -20,10 +20,11 @@ naming rules:
 
 for `Get` operation, defaultly
 soft deleted data are not included.
-only `Get` operation have counterpart of `GetXxx` and `GetXxxWithDel`
+
+only read operation have counterpart of ReadXxx and `ReadXxxWithDel`
 ")]
 public partial interface IRepo<TEntity, TId>{
-	public IAsyncEnumerable<TEntity?> GetManyInId(
+	public IAsyncEnumerable<TEntity?> GetInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
@@ -31,12 +32,12 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"using `Id IN (...)` Clause,
 	which would ignore unexisted Id and returned list may be unordered.
 	")]
-	public IAsyncEnumerable<TEntity?> GetManyInIdWithDel(
+	public IAsyncEnumerable<TEntity?> GetInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 
-	public IAsyncEnumerable<TEntity?> BatGetById(
+	public IAsyncEnumerable<TEntity?> OrdGetById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
@@ -47,19 +48,19 @@ public partial interface IRepo<TEntity, TId>{
 	-> [true, false, true]
 	])
 	")]
-	public IAsyncEnumerable<bool> BatExistsById(
+	public IAsyncEnumerable<bool> OrdExistsById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 	
-	public IAsyncEnumerable<bool> BatExistsByIdWithDel(
+	public IAsyncEnumerable<bool> OrdExistsByIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
 	
 
 	[Doc(@$"Got Entities are corresponding to the given Ids. if not found, the place will be null.")]
-	public IAsyncEnumerable<TEntity?> BatGetByIdWithDel(
+	public IAsyncEnumerable<TEntity?> OrdGetByIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	);
@@ -76,7 +77,7 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"
 	should throw exception if conflict (e.g constraint violation) etc.
 	")]
-	public Task<IRespBatInsert> BatAdd(
+	public Task<IRespBatInsert> OrdAdd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
@@ -84,7 +85,7 @@ public partial interface IRepo<TEntity, TId>{
 	so you don't need to provide the entity id independantly.
 	should throw exception if conflict (e.g constraint violation) etc.
 	")]
-	public Task<IRespBatUpd> BatUpd(
+	public Task<IRespBatUpd> OrdUpd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
@@ -92,7 +93,7 @@ public partial interface IRepo<TEntity, TId>{
 	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code.
 	soft deleted rows are included to determine whether the data exists or not.
 	")]
-	public Task<IRespBatUpsert> BatUpsert(
+	public Task<IRespBatUpsert> OrdUpsert(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 	
@@ -111,7 +112,7 @@ public partial interface IRepo<TEntity, TId>{
 	```
 	])
 	")]
-	public Task<IRespBatUpd> BatUpdByDbDict(
+	public Task<IRespBatUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -133,18 +134,18 @@ public partial interface IRepo<TEntity, TId>{
 	```
 	])
 	")]
-	public Task<IRespBatUpd> BatUpdByCodeDict(
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
 		,CT Ct
 	);
 	
-	public Task<IBatSoftDel> BatSoftDelById(
+	public Task<IBatSoftDel> OrdSoftDelById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 	
-	public Task<IBatHardDel> BatHardDelById(
+	public Task<IBatHardDel> OrdHardDelById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 	
@@ -158,7 +159,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	#region Agg
 	
-	public Task<IRespBatAddAgg> BatAddAgg<TAgg>(
+	public Task<IRespBatAddAgg> OrdAddAgg<TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> NewAgg
 		,CT Ct
@@ -171,12 +172,12 @@ public partial interface IRepo<TEntity, TId>{
 	);
 	
 	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
-	public IAsyncEnumerable<TAgg?> BatGetAggById<TAgg>(
+	public IAsyncEnumerable<TAgg?> OrdGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)where TAgg: class;
 	
-	public IAsyncEnumerable<TAgg?> BatGetAggByIdWithDel<TAgg>(
+	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)where TAgg: class;
@@ -189,7 +190,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	
 	[Doc(@$"Soft Delete Both Root and its related assets,
-	if you only need to soft del the root, use {nameof(BatSoftDelById)} for the root
+	if you only need to soft del the root, use {nameof(OrdSoftDelById)} for the root
 	")]
 	public Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
@@ -197,21 +198,21 @@ public partial interface IRepo<TEntity, TId>{
 	
 	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
-		use `{nameof(BatGetAggByIdWithDel)}` will return the updated agg
-		as what I passed to `{nameof(BatHardUpdAgg)}`.
+		use `{nameof(OrdGetAggByIdWithDel)}` will return the updated agg
+		as what I passed to `{nameof(OrdHardUpdAgg)}`.
 		`Hard` means hard delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> BatHardUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdHardUpdAgg<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	
 	[Doc(@$"Batch Update Aggregates. make db's data the same as passed-in data
 		for each agg, after update,
-		use `{nameof(BatGetAggByIdWithDel)}` will return the updated agg
-		as what I passed to `{nameof(BatHardUpdAgg)}`.
+		use `{nameof(OrdGetAggByIdWithDel)}` will return the updated agg
+		as what I passed to `{nameof(OrdHardUpdAgg)}`.
 		`Soft` means Soft delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> BatSoftUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	

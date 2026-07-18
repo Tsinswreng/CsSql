@@ -131,6 +131,40 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return Run();
 	}
 
+	/// 统一生成聚合 include 读取器。
+	/// `WithDel=false` 时，按 ORM 默认语义排除软删除资产；`WithDel=true` 时则保留。
+	private async Task<Func<IList<TKey>, CT, IAsyncEnumerable<IStr_Any?>>> FnScltAggIncludeByColInVals<TKey>(
+		IDbFnCtx Ctx
+		,ITable Tbl
+		,str CodeCol
+		,OptQry? OptQry
+		,bool WithDel
+		,CT Ct
+	)
+	{
+		var TIncludeTbl = Tbl;
+		OptQry ??= new OptQry();
+		var numParams = TIncludeTbl.NumParamsEndStart(OptQry.InParamCnt - 1);
+		var nonDelSql = !WithDel && TIncludeTbl.SoftDelCol is not null
+			? "\nAND " + TIncludeTbl.SqlIsNonDel()
+			: "";
+		var sql =
+$"""
+SELECT * FROM {TIncludeTbl.Qt(TIncludeTbl.DbTblName)}
+WHERE 1=1
+AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
+""";
+		var sqlCmd = await SqlCmdMkr.Prepare(Ctx, sql, Ct);
+		return (Args, Ct)=>{
+			if(Args.Count < numParams.Count){
+				throw new Exception("Args.Count < numParams.Count");
+			}
+			var arg = ArgDict.Mk(TIncludeTbl)
+				.AddManyT(numParams, Args);
+			return Ctx.RunCmd(sqlCmd, arg).AsyE1d(Ct);
+		};
+	}
+
 	private IAsyncEnumerable<TAgg> GetAllAggCore<TAgg>(
 		IDbFnCtx Ctx
 		,bool WithDel
@@ -154,7 +188,14 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 
 			var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
 			foreach(var include in aggReg.Includes){
-				var slctByIn = await FnScltAllByColInVals<TId>(Ctx, include.Tbl, include.FKeyCodeCol, optQry, Ct);
+				var slctByIn = await FnScltAggIncludeByColInVals<TId>(
+					Ctx,
+					include.Tbl,
+					include.FKeyCodeCol,
+					optQry,
+					WithDel,
+					Ct
+				);
 				var dbAsy = slctByIn(rootIds, Ct);
 				await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
 					var codeDict = include.Tbl.ToCodeDict(dbDict);
@@ -266,7 +307,14 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 				var rootIds = rootIdSet.ToList();
 				var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
 				foreach(var include in aggReg.Includes){
-					var slctByIn = await FnScltAllByColInVals<TId>(Ctx, include.Tbl, include.FKeyCodeCol, optQry, Ct);
+					var slctByIn = await FnScltAggIncludeByColInVals<TId>(
+						Ctx,
+						include.Tbl,
+						include.FKeyCodeCol,
+						optQry,
+						WithDel,
+						Ct
+					);
 					var dbAsy = slctByIn(rootIds, Ct);
 					await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
 						var codeDict = include.Tbl.ToCodeDict(dbDict);
@@ -336,7 +384,7 @@ WHERE 1=1{MkNonDelFilterSql(WithDel)}
 		return GetManyInIdCore(Ctx, Ids, false, Ct);
 	}
 
-	public IAsyncEnumerable<TEntity?> GetInIdsWithDel(
+	public IAsyncEnumerable<TEntity?> GetInIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
@@ -433,12 +481,22 @@ Func<
 		,OptQry? OptQry
 		,CT Ct
 	)where TPo: new(){
-		var fn = await FnScltAllByColInVals<TKey>(Ctx, Tbl, CodeCol, OptQry, Ct);
+		var WithDel = OptQry?.IncludeDeleted ?? false;
+		var fn = await FnScltAggIncludeByColInVals<TKey>(
+			Ctx,
+			Tbl,
+			CodeCol,
+			OptQry,
+			WithDel,
+			Ct
+		);
 		return async(Tbl, Memb, Keys, Ct)=>{
 			IList<TKey> KeyList = Keys.Where(x=>x is not null).ToList()!;
 			var poPage = fn(KeyList, Ct);
 			var dicts = await poPage.ToListAsync(Ct);
-			var pos = dicts.Select(x=>Tbl.DbDictToEntity<TPo>(x));
+			var pos = dicts
+				.Where(x=>x is not null)
+				.Select(x=>Tbl.DbDictToEntity<TPo>(x!));
 			IDictionary<TKey, IList<TPo>> posByKey = pos.GroupBy(Memb).ToDictionary(g=>g.Key, g=>(IList<TPo>)g.ToList());
 			return posByKey;
 		};
@@ -453,10 +511,15 @@ Func<
 		,ITable Tbl
 		,CT Ct
 	)where TPo: new(){
-		//var keyList = Keys.AsOrToList();
-		// 自動把OptQry之ParamCnt設成 Keys.Count?
-		var fn = await FnIncludeEntitysByKeys<TPo, TKey>(Ctx, Tbl, CodeCol, OptQry, Ct);
-		return await fn(Tbl, FnMemb, Keys, Ct);
+		return await IncludeEntitysByKeysCore(
+			Ctx,
+			CodeCol,
+			OptQry,
+			Keys,
+			FnMemb,
+			Tbl,
+			Ct
+		);
 	}
 
 	public async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
@@ -468,10 +531,46 @@ Func<
 		,ITable<TPo> Tbl
 		,CT Ct
 	)where TPo: new(){
-		//var keyList = Keys.AsOrToList();
-		// 自動把OptQry之ParamCnt設成 Keys.Count?
-		var fn = await FnIncludeEntitysByKeys<TPo, TKey>(Ctx, Tbl, CodeCol, OptQry, Ct);
-		return await fn(Tbl, FnMemb, Keys, Ct);
+		return await IncludeEntitysByKeysCore(
+			Ctx,
+			CodeCol,
+			OptQry,
+			Keys,
+			FnMemb,
+			Tbl,
+			Ct
+		);
+	}
+
+	/// 執行兩個 IncludeEntitysByKeys overload 的共用流程。
+	/// 呼叫者只需提供 key；查詢參數數量由實際的非 null key 數自動決定。
+	private async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeysCore<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey?> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable Tbl
+		,CT Ct
+	)where TPo: new(){
+		// 先過濾並固定輸入，避免可迭代集合被多次消費，也讓 SQL 參數數量準確匹配。
+		IList<TKey> KeyList = Keys.Where(X=>X is not null).ToList()!;
+		if(KeyList.Count == 0){
+			return new Dictionary<TKey, IList<TPo>>();
+		}
+
+		// record copy 保留 IncludeDeleted 等選項，只覆蓋由本函數負責推導的參數數量。
+		var EffectiveOptQry = (OptQry ?? new OptQry()) with{
+			InParamCnt = (u64)KeyList.Count,
+		};
+		var Fn = await FnIncludeEntitysByKeys<TPo, TKey>(
+			Ctx,
+			Tbl,
+			CodeCol,
+			EffectiveOptQry,
+			Ct
+		);
+		return await Fn(Tbl, FnMemb, KeyList, Ct);
 	}
 
 	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
@@ -587,7 +686,7 @@ Func<
 	){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var CmdBySql = new Dictionary<str, ISqlCmd>();
-		var dbIdColName = T.DbCol(T.CodeIdName);
+		var dbIdColName = T.DbColName(T.CodeIdName);
 
 		async Task<ISqlCmd> GetCmd(str Sql, CT Ct){
 			if(CmdBySql.TryGetValue(Sql, out var Got)){
@@ -1155,6 +1254,13 @@ Func<
 		,CT Ct
 	){
 		return BatExistsByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<bool> OrdExistsByIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return BatExistsByIdCore(Ctx, Ids, true, Ct);
 	}
 	
 	public async Task<IRespBatUpsert> OrdUpsert(

@@ -11,9 +11,9 @@ using Tsinswreng.CsU128Id;
 
 public static class ExtnITable {
 	extension(ITable z) {
-		[Doc($@"
-		Quote field name for SQL, e.g. in sqlite: ""field_name""; in mysql: `field_name`;
-		")]
+		[Doc($"""
+		Quote field name for SQL, e.g. in sqlite: "field_name"; in mysql: `field_name`;
+		""")]
 		public str Qt(
 			str s
 		) {
@@ -38,7 +38,7 @@ public static class ExtnITable {
 		#Params([Column name C# code (entity field)])
 		#Rtn[Column name in database table]
 		")]
-		public str DbCol(
+		public str DbColName(
 			str CodeColName
 		) {
 			var Col = z.GetCol(CodeColName);
@@ -47,12 +47,12 @@ public static class ExtnITable {
 		}
 
 		[Doc(@$"#Sum[Map entity field name to quoted database column name.]
-		#See[{nameof(DbCol)} then {nameof(ExtnITable.Qt)}]
+		#See[{nameof(DbColName)} then {nameof(ExtnITable.Qt)}]
 		")]
 		public str QtCol(
 			str CodeColName
 		) {
-			var dbColName = z.DbCol(CodeColName);
+			var dbColName = z.DbColName(CodeColName);
 			return z.SqlMkr.Quote(dbColName);
 		}
 
@@ -117,7 +117,7 @@ public static class ExtnITable {
 			IParam CodeColNameParam
 		) {
 			var CodeColName = CodeColNameParam.Name;
-			var DbColName = z.DbCol(CodeColName);
+			var DbColName = z.DbColName(CodeColName);
 			return z.SqlMkr.Quote(DbColName);
 		}
 

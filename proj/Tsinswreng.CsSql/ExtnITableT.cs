@@ -14,7 +14,7 @@ public static partial class ExtnITableT{
 		public str DbCol(Expression<Func<T, obj?>> ExprMemb){
 			var t = (ITable)z;
 			var memb = ToolExpr.GetMemberName(ExprMemb);
-			return t.DbCol(memb);
+			return t.DbColName(memb);
 		}
 
 		public IDbField QtCol(Expression<Func<T, obj?>> ExprMemb){

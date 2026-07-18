@@ -88,7 +88,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		var seg = "SELECT"
 		+Qt(Tbl.DbTblName)
 		+"."
-		+Qt(Tbl.DbCol(memb))
+		+Qt(Tbl.DbColName(memb))
 		+" AS "
 		+Qt(memb);
 		return AddSeg(seg);

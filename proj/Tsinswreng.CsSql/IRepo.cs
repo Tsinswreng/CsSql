@@ -171,12 +171,19 @@ public partial interface IRepo<TEntity, TId>{
 		IDbFnCtx Ctx, CT Ct
 	);
 	
-	[Doc(@$"Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().")]
+	[Doc(@$"
+	Batch select aggregate roots by ids; aggregate metadata should be registered in ITblMgr.AddAgg().
+	When method name does NOT contain `WithDel`, both aggregate root and included assets must exclude soft-deleted rows.
+	")]
 	public IAsyncEnumerable<TAgg?> OrdGetAggById<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	)where TAgg: class;
 	
+	[Doc(@$"
+	Batch select aggregate roots by ids and include soft-deleted rows.
+	When method name contains `WithDel`, both aggregate root and included assets are allowed to contain soft-deleted rows.
+	")]
 	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct

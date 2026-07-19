@@ -1,19 +1,22 @@
 #define Impl
 namespace Tsinswreng.CsSql;
 using System.Data;
-
+using Tsinswreng.CsCtx;
 
 [Doc(@$"Database Function Context")]
-public partial class DbFnCtx:IDbFnCtx{
-	[Doc(@$"Transaction")]
+public partial class DbFnCtx:
+	FnCtx
+	,IDbFnCtx
+{
+	// [BeaKona.AutoInterface(typeof(IFnCtx), IncludeBaseInterfaces = true)]
+	// public IFnCtx IFnCtx{get;set;}
+	
 	public ITxn? Txn{get;set;}
-	[Doc(@$"don't need to set {nameof(DbConn)} manually
-	when you pass DbFnCtx to {nameof(ISqlCmdMkr.MkCmd)}
-	if {nameof(DbConn)} is null, it will be initialized by {nameof(IDbConnMgr)}
-	")]
+
 	public IDbConnection? DbConn{get;set;}
-	[Doc(@$"KV Properties")]
-	public IDictionary<str, object?>? Props{get;set;}
+	
+	//public IDictionary<obj, obj?>? Props{get;set;}
+	
 	public ICollection<obj?>? ObjsToDispose{get;set;}
 #if Impl
 	 = new List<obj?>();

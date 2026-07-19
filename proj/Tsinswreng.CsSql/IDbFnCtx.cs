@@ -1,14 +1,22 @@
 using System.Data;
 
 namespace Tsinswreng.CsSql;
+using Tsinswreng.CsCtx;
 
 public partial interface IDbFnCtx
-	:IAsyncDisposable
+	:IFnCtx
+	,IAsyncDisposable
 {
 	[Doc(@$"Transaction")]
 	public ITxn? Txn{get;set;}
+	
+	[Doc(@$"don't need to set {nameof(DbConn)} manually
+	when you pass DbFnCtx to {nameof(ISqlCmdMkr.MkCmd)}
+	if {nameof(DbConn)} is null, it will be initialized by {nameof(IDbConnMgr)}
+	")]
 	public IDbConnection? DbConn{get;set;}
-	public IDictionary<str, obj?>? Props{get;set;}
+	
+	//public IDictionary<obj, obj?>? Props{get;set;}
 	[Doc(@$"Use {nameof(ExtnIDbFnCtx.AddToAsyDispose)} instead of directory operate on {nameof(ObjsToDispose)}")]
 	public ICollection<obj?>? ObjsToDispose{get;set;}
 #if Impl

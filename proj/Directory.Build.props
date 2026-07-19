@@ -36,6 +36,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<!-- <ProjectReference Include="../../../Tsinswreng.CsCore/proj/Tsinswreng.CsCore/Tsinswreng.CsCore.csproj" /> -->
+		<ProjectReference Include="../../../Tsinswreng.CsCtx/proj/Tsinswreng.CsCtx/Tsinswreng.CsCtx.csproj" />
 		<PackageReference Include="Tsinswreng.CsCore" Version="0.0.1-alpha" />
 		<PackageReference Include="Tsinswreng.CsU128Id" Version="0.0.1-alpha" />
 		<PackageReference Include="Tsinswreng.CsTools" Version="0.0.1-alpha" />
@@ -49,6 +50,6 @@
 	</ItemGroup> -->
 
 	<ItemGroup>
-		<!-- <PackageReference Include="System.Linq.Async" Version="6.0.1" /> -->
+		<PackageReference Include="BeaKona.AutoInterfaceGenerator" Version="1.0.46" />
 	</ItemGroup>
 </Project>

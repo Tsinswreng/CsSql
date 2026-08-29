@@ -5,13 +5,13 @@ using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Ngaq.Core.Infra;
-using Ngaq.Core.Infra.Db;
-using Ngaq.Core.Model;
-using Ngaq.Core.Model.Po;
+using Ngan.Dict.Core.Infra;
+using Ngan.Dict.Core.Infra.Db;
+using Ngan.Dict.Core.Model;
+using Ngan.Dict.Core.Model.Po;
 using Tsinswreng.CsSql;
 
-namespace Ngaq.Backend.Db;
+namespace Ngan.Dict.Backend.Db;
 //using T = Bo_Word;
 
 using DbCtx = DbContext;

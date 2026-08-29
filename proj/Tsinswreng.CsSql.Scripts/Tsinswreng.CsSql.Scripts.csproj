@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- 默認 AOT 發布 -->
+		<PublishAot>true</PublishAot>
+		<!-- 各具名腳本保留 Main(Root, CancellationToken) 供 dispatcher 呼叫；只有 Program.Main 是 CLR entry point。 -->
+		<NoWarn>CS0028</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- CsSh 固定從 NuGet 引用、不依賴工作區源碼 -->
+		<PackageReference Include="Tsinswreng.CsSh" Version="0.3.0-alpha" />
+	</ItemGroup>
+
+</Project>

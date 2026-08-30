@@ -1,4 +1,5 @@
 using Tsinswreng.CsSql.Test.CsSql.Repo;
+using Tsinswreng.CsSql.Test.CsSql.TblCfg;
 using Tsinswreng.CsSql.Test.CsSql.TblSetter;
 using Tsinswreng.CsTreeTest;
 
@@ -15,6 +16,7 @@ public class CsSqlTestMgr : DiEtTestMgr {
 		Test.IsParallelRecursive = true;  // 遞迴禁用並行,所有資料庫測試共用同一 sqlite 連接
 		this.RegisterTester<TestRepo>();
 		this.RegisterTester<TestTblSetter>();
+		this.RegisterTester<TestTblCfg>();
 		return Test;
 	}
 }

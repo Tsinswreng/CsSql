@@ -1,0 +1,74 @@
+== postgres 基準: 總量 5000 行, 批大小 [1,10,50,100,500,1000], 輪數 5 ==
+
+===== Insert 5000 rows, batch=1 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3225.72        0.6451        
+B.事務內循環                      913.52         0.1827        
+C.多行VALUES                   893.66         0.1787        
+D.IRepo.OrdAdd(現狀,無事務)       124.59         0.0249        
+D2.IRepo.OrdAdd(事務內)         119.49         0.0239        
+E.NpgsqlBatch                915.79         0.1832        
+F.COPY(BinaryImporter)       11.51          0.0023        
+
+
+===== Insert 5000 rows, batch=10 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3560.95        0.7122        
+B.事務內循環                      1016.65        0.2033        
+C.多行VALUES                   152.46         0.0305        
+D.IRepo.OrdAdd(現狀,無事務)       128.61         0.0257        
+D2.IRepo.OrdAdd(事務內)         124.50         0.0249        
+E.NpgsqlBatch                222.50         0.0445        
+F.COPY(BinaryImporter)       14.55          0.0029        
+
+
+===== Insert 5000 rows, batch=50 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3549.90        0.7100        
+B.事務內循環                      1058.23        0.2116        
+C.多行VALUES                   66.51          0.0133        
+D.IRepo.OrdAdd(現狀,無事務)       129.94         0.0260        
+D2.IRepo.OrdAdd(事務內)         128.84         0.0258        
+E.NpgsqlBatch                144.97         0.0290        
+F.COPY(BinaryImporter)       12.98          0.0026        
+
+
+===== Insert 5000 rows, batch=100 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3653.44        0.7307        
+B.事務內循環                      1077.25        0.2154        
+C.多行VALUES                   59.19          0.0118        
+D.IRepo.OrdAdd(現狀,無事務)       130.54         0.0261        
+D2.IRepo.OrdAdd(事務內)         128.29         0.0257        
+E.NpgsqlBatch                133.21         0.0266        
+F.COPY(BinaryImporter)       14.38          0.0029        
+
+
+===== Insert 5000 rows, batch=500 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3896.38        0.7793        
+B.事務內循環                      1072.64        0.2145        
+C.多行VALUES                   45.24          0.0090        
+D.IRepo.OrdAdd(現狀,無事務)       133.09         0.0266        
+D2.IRepo.OrdAdd(事務內)         128.27         0.0257        
+E.NpgsqlBatch                125.78         0.0252        
+F.COPY(BinaryImporter)       15.25          0.0031        
+
+
+===== Insert 5000 rows, batch=1000 (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+A.單條循環(無事務)                  3566.00        0.7132        
+B.事務內循環                      986.01         0.1972        
+C.多行VALUES                   47.20          0.0094        
+D.IRepo.OrdAdd(現狀,無事務)       133.20         0.0266        
+D2.IRepo.OrdAdd(事務內)         129.85         0.0260        
+E.NpgsqlBatch                134.27         0.0269        
+F.COPY(BinaryImporter)       13.32          0.0027        
+
+
+===== Read 5000 rows (總量 5000) =====
+方案                           總耗時(ms)        每條均攤(ms)      
+OrdGetById                   181.50         0.0363        
+GetInId                      21.79          0.0044        
+GetAll                       10.48          0.0021        
+

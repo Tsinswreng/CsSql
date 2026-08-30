@@ -500,7 +500,8 @@ public static class ExtnITable {
 			for (u64 i = StartPos; i <= EndPos; i++) {
 				var Param = z.Prm(i + "").ToString() ?? "";
 				R.Add(Param);
-				if (i == EndPos) {
+				// 參數之間以逗號分隔;末尾不加,否則會生成 "(@0@1@2, )" 的壞 SQL
+				if (i != EndPos) {
 					R.Add(", ");
 				}
 			}

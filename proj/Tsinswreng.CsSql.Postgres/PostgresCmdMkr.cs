@@ -73,7 +73,10 @@ public partial class PostgresCmdMkr
 			return Ctx.Txn;
 		}
 		var DbConnection = Ctx.DbConn??await DbConnGetter.GetConn(Ct);
-		//var DbConnection = await DbConnGetter.GetConnAsy(Ct);
+		// 與 sqlite 一致:IDbFnCtx.DisposeAsync 會關閉共用連接,開事務前需確保連接打開
+		if(DbConnection is NpgsqlConnection npgConn && npgConn.State != ConnectionState.Open){
+			await npgConn.OpenAsync(Ct);
+		}
 		Ctx.DbConn = DbConnection;
 		var Tx = DbConnection.BeginTransaction();
 		var Ans = new AdoTxn(Tx);

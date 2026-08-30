@@ -1,10 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net10.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
 	</PropertyGroup>
+
+	<!-- pg 功能測試入口:注入 pg DI、跑 CsSqlTestMgr 全部用例。
+		此前是空殼(執行層未在 pg 上真正跑過);基準測出 OrdAdd 緩存命令復用 bug 後,
+		本入口作為該類執行層 bug 的回歸網,與 Test.Sqlite 對稱。 -->
+
+	<ItemGroup>
+		<ProjectReference Include="../Tsinswreng.CsSql.Test/Tsinswreng.CsSql.Test.csproj" />
+		<ProjectReference Include="../Tsinswreng.CsSql.Postgres/Tsinswreng.CsSql.Postgres.csproj" />
+	</ItemGroup>
 
 </Project>

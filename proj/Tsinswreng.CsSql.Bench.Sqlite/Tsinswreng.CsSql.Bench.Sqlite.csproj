@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+	</PropertyGroup>
+
+	<!-- sqlite 性能基準入口:接線 + 跑基準場景。DB 專用的原始執行器(SqliteRawExecutor)也在這裡。 -->
+
+	<ItemGroup>
+		<ProjectReference Include="../Tsinswreng.CsSql.Bench/Tsinswreng.CsSql.Bench.csproj" />
+		<ProjectReference Include="../Tsinswreng.CsSql.Sqlite/Tsinswreng.CsSql.Sqlite.csproj" />
+	</ItemGroup>
+
+</Project>

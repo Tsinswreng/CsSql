@@ -576,8 +576,6 @@ Func<
 	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var Cols = T.Columns.Keys.ToList();
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
-
 		str MkSql(u64 Cnt){
 			var Stmts = new List<str>((i32)Cnt);
 			foreach(var i in Enumerable.Range(0, (i32)Cnt)){
@@ -590,12 +588,9 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -629,7 +624,6 @@ Func<
 		}
 
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
 
 		str MkSql(u64 Cnt){
 			var Stmts = new List<str>((i32)Cnt);
@@ -643,12 +637,9 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -685,16 +676,12 @@ Func<
 		,CT Ct
 	){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		var CmdBySql = new Dictionary<str, ISqlCmd>();
 		var dbIdColName = T.DbColName(T.CodeIdName);
 
 		async Task<ISqlCmd> GetCmd(str Sql, CT Ct){
-			if(CmdBySql.TryGetValue(Sql, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdBySql[Sql] = Cmd;
 			return Cmd;
 		}
 
@@ -771,7 +758,6 @@ Func<
 			throw new Exception("SoftDeleteCol is null");
 		}
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
 		var valToSet = T.SoftDelCol.FnDelete(null);
 
 		str MkSql(u64 Cnt){
@@ -781,12 +767,9 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -813,20 +796,15 @@ Func<
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
-
 		str MkSql(u64 Cnt){
 			var IdParams = T.NumParams(Cnt).ToList();
 			return $"DELETE FROM {T.Qt(T.DbTblName)} WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", IdParams)})";
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -852,7 +830,6 @@ Func<
 		}
 
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
 		var valToSet = T.SoftDelCol.FnDelete(null);
 
 		str MkSql(u64 Cnt){
@@ -862,12 +839,9 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -894,7 +868,6 @@ Func<
 
 	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		var CmdByCnt = new Dictionary<u64, ISqlCmd>();
 
 		str MkSql(u64 Cnt){
 			var IdParams = T.NumParams(Cnt).ToList();
@@ -902,12 +875,9 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			if(CmdByCnt.TryGetValue(Cnt, out var Got)){
-				return Got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
 			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
 			Ctx.AddToDispose(Cmd);
-			CmdByCnt[Cnt] = Cmd;
 			return Cmd;
 		}
 
@@ -953,9 +923,7 @@ Func<
 
 		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var rootCols = T.Columns.Keys.ToList();
-		var rootCmdByCnt = new Dictionary<u64, ISqlCmd>();
 		var includeColsByType = new Dictionary<Type, IList<str>>();
-		var includeCmdByTypeCnt = new Dictionary<(Type, u64), ISqlCmd>();
 
 		str MkInsertSql(ITable tbl, IList<str> cols, u64 cnt){
 			var stmts = new List<str>((i32)cnt);
@@ -969,27 +937,20 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetRootCmd(u64 cnt, CT Ct){
-			if(rootCmdByCnt.TryGetValue(cnt, out var got)){
-				return got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
 			var cmd = await SqlCmdMkr.Prepare(Ctx, MkInsertSql(T, rootCols, cnt), Ct);
 			Ctx.AddToDispose(cmd);
-			rootCmdByCnt[cnt] = cmd;
 			return cmd;
 		}
 
 		async Task<ISqlCmd> GetIncludeCmd(IAggIncludeReg include, u64 cnt, CT Ct){
-			var key = (include.EntityType, cnt);
-			if(includeCmdByTypeCnt.TryGetValue(key, out var got)){
-				return got;
-			}
 			if(!includeColsByType.TryGetValue(include.EntityType, out var cols)){
 				cols = include.Tbl.Columns.Keys.ToList();
 				includeColsByType[include.EntityType] = cols;
 			}
+			// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
 			var cmd = await SqlCmdMkr.Prepare(Ctx, MkInsertSql(include.Tbl, cols, cnt), Ct);
 			Ctx.AddToDispose(cmd);
-			includeCmdByTypeCnt[key] = cmd;
 			return cmd;
 		}
 
@@ -1136,8 +1097,6 @@ Func<
 		}
 
 		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
-		var rootCmdByCnt = new Dictionary<u64, ISqlCmd>();
-		var includeCmdByTypeCnt = new Dictionary<(Type, u64), ISqlCmd>();
 
 		str MkDelSql(ITable tbl, str codeCol, u64 cnt, bool softDelete){
 			var idParams = tbl.NumParams(cnt).ToList();
@@ -1152,23 +1111,16 @@ Func<
 		}
 
 		async Task<ISqlCmd> GetRootCmd(u64 cnt, CT Ct){
-			if(rootCmdByCnt.TryGetValue(cnt, out var got)){
-				return got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
 			var cmd = await SqlCmdMkr.Prepare(Ctx, MkDelSql(T, T.CodeIdName, cnt, SoftDelete), Ct);
 			Ctx.AddToDispose(cmd);
-			rootCmdByCnt[cnt] = cmd;
 			return cmd;
 		}
 
 		async Task<ISqlCmd> GetIncludeCmd(IAggIncludeReg include, u64 cnt, CT Ct){
-			var key = (include.EntityType, cnt);
-			if(includeCmdByTypeCnt.TryGetValue(key, out var got)){
-				return got;
-			}
+			// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
 			var cmd = await SqlCmdMkr.Prepare(Ctx, MkDelSql(include.Tbl, include.FKeyCodeCol, cnt, SoftDelete), Ct);
 			Ctx.AddToDispose(cmd);
-			includeCmdByTypeCnt[key] = cmd;
 			return cmd;
 		}
 

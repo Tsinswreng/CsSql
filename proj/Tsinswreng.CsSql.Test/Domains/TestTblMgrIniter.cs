@@ -13,8 +13,9 @@ public static class TestTblMgrIniter {
 		var tbl = Table.FnSetTbl<PoAllBasicTypes>(mapper)("AllBasicTypes");
 		tbl.Tbl.CodeIdName = nameof(PoAllBasicTypes.Id);
 
+		// Id/BlobVal 不顯式設 DbType:由各 DB 類型映射器決定(sqlite→BLOB、pg→bytea),
+		// 否則 "BLOB" 會原樣進 pg 的 CREATE TABLE 報錯(見 ExtnITable.SqlMkTbl:DbType 非空時直接入 DDL)
 		tbl.Col(nameof(PoAllBasicTypes.Id))
-			.Type<byte[], byte[]>("BLOB")
 			.NotNull()
 			.AdditionalSqls(["PRIMARY KEY"]);
 		tbl.Col(nameof(PoAllBasicTypes.U8Val)).Type<byte, byte>("INTEGER");
@@ -32,8 +33,8 @@ public static class TestTblMgrIniter {
 		tbl.Col(nameof(PoAllBasicTypes.F64Nullable)).Type<double?, double?>("REAL");
 		tbl.Col(nameof(PoAllBasicTypes.StrVal)).Type<string, string>("TEXT").NotNull();
 		tbl.Col(nameof(PoAllBasicTypes.StrNullable)).Type<string?, string?>("TEXT");
-		tbl.Col(nameof(PoAllBasicTypes.BlobVal)).Type<byte[], byte[]>("BLOB").NotNull();
-		tbl.Col(nameof(PoAllBasicTypes.BlobNullable)).Type<byte[]?, byte[]?>("BLOB");
+		tbl.Col(nameof(PoAllBasicTypes.BlobVal)).NotNull();
+		tbl.Col(nameof(PoAllBasicTypes.BlobNullable));
 		mgr.AddTbl(tbl);
 
 		// ===== Kv:帶軟刪,覆蓋基礎 CRUD/批量/軟刪 =====

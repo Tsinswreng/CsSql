@@ -1,0 +1,16 @@
+# CsSql 性能基準用 PostgreSQL。
+# 用法:docker compose up -d   (啟動)
+#       docker compose down    (停止並移除)
+# 端口映射 5433 避開宿主上可能已有的 5432。
+services:
+  csql-bench-pg:
+    # 本機無法訪問 Docker Hub(postgres:17 拉取超時),改用本地已有的 postgres:latest
+    image: postgres:latest
+    container_name: csql-bench-pg
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_PASSWORD: CsqlBench
+      POSTGRES_USER: postgres
+      POSTGRES_DB: csql_bench
+    # 基準測試要乾淨環境,不掛持久化 volume,每次 up 都是全新庫

@@ -65,22 +65,6 @@ public static class ExtnISqlCmdMkr{
 		}
 	}
 
-	private static async Task<ISqlCmd> EnsureCmdForBatch(
-		ISqlCmdMkr CmdMkr,
-		IDbFnCtx Ctx,
-		IAutoBindSqlDuplicator Sql,
-		u64 BatchSize, // 批大小
-		u64 Cnt, //入參數量 (或滿一批 亦或不滿批(末批))
-		ISqlCmd? FullBatchCmd,
-		CT Ct
-	){
-		if(Cnt == BatchSize){
-			FullBatchCmd ??= await CmdMkr.Prepare(Ctx, Sql.DuplicateSql(BatchSize), Ct);
-			return FullBatchCmd;
-		}
-		return await CmdMkr.Prepare(Ctx, Sql.DuplicateSql(Cnt), Ct);
-	}
-
 	private static IArgDict BuildArgsForBatch(
 		IList<IParamAutoBinder> oneBinders,
 		IList<IParamAutoBinderMulti> manyBinders,
@@ -275,67 +259,47 @@ public static class ExtnISqlCmdMkr{
 			var BatchSize = z.DbSrcType.Eq(EDbSrcType.Sqlite) ? 1ul : 500ul; //TODO
 			var (multiBinders, manyAsyncBinders, oneBinders) = SplitBinders(Sql.ParamAutoBinders);
 
-			ISqlCmd? fullBatchCmd = null;
-			ISqlCmd? finalBatchCmd = null;
-			try{
-				// 无 Multi binder 和异步 binder：执行一次固定参数
-				if(multiBinders.Count == 0 && manyAsyncBinders.Count == 0){
-					var cmd = await z.Prepare(Ctx, Sql.DuplicateSql(1), Ct);
-					finalBatchCmd = cmd;
-					var args = ArgDict.Mk();
-					foreach(var binder in oneBinders){
-						binder.Bind(args);
-					}
-					await foreach(var row in YieldRows(cmd, args, Ct)){
-						yield return row;
-					}
-					yield break;
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),
+			// 跨批復用緩存命令在 pg 上會因已釋放而崩(sqlite 因 SqliteCommand 容錯未顯形)
+			// 无 Multi binder 和异步 binder：执行一次固定参数
+			if(multiBinders.Count == 0 && manyAsyncBinders.Count == 0){
+				var cmd = await z.Prepare(Ctx, Sql.DuplicateSql(1), Ct);
+				var args = ArgDict.Mk();
+				foreach(var binder in oneBinders){
+					binder.Bind(args);
 				}
-
-				// 只有异步 binder，无同步 binder
-				if(multiBinders.Count == 0 && manyAsyncBinders.Count > 0){
-					await foreach(var row in z.RunDupliSql(Ctx, Sql, oneBinders, manyAsyncBinders, BatchSize, Ct)){
-						yield return row;
-					}
-					yield break;
+				await foreach(var row in YieldRows(cmd, args, Ct)){
+					yield return row;
 				}
+				yield break;
+			}
 
-				// 同时有同步和异步 binder（不支持混合，报错）
-				if(manyAsyncBinders.Count > 0){
-					throw new NotSupportedException("Cannot mix sync and async binders in same query");
+			// 只有异步 binder，无同步 binder
+			if(multiBinders.Count == 0 && manyAsyncBinders.Count > 0){
+				await foreach(var row in z.RunDupliSql(Ctx, Sql, oneBinders, manyAsyncBinders, BatchSize, Ct)){
+					yield return row;
 				}
+				yield break;
+			}
 
-				// 仅有同步 Multi binder
-				while(true){
-					if(!TryTakeAlignedBatches(multiBinders, BatchSize, out var firstBatch, out var batches)){
-						break;
-					}
-					var cnt = (u64)firstBatch.Count;
+			// 同时有同步和异步 binder（不支持混合，报错）
+			if(manyAsyncBinders.Count > 0){
+				throw new NotSupportedException("Cannot mix sync and async binders in same query");
+			}
 
-					ISqlCmd curCmd;
-					if(cnt == BatchSize){
-						fullBatchCmd ??= await EnsureCmdForBatch(z, Ctx, Sql, BatchSize, cnt, fullBatchCmd, Ct);
-						curCmd = fullBatchCmd;
-					}else{
-						if(finalBatchCmd != null && !ReferenceEquals(finalBatchCmd, fullBatchCmd)){
-							await finalBatchCmd.DisposeAsync();
-						}
-						finalBatchCmd = await EnsureCmdForBatch(z, Ctx, Sql, BatchSize, cnt, fullBatchCmd, Ct);
-						curCmd = finalBatchCmd;
-					}
-
-					var args = BuildArgsForBatch(oneBinders, multiBinders, batches);
-
-					await foreach(var row in YieldRowsOrNull(curCmd, args, Ct)){
-						yield return row;
-					}
+			// 仅有同步 Multi binder
+			while(true){
+				if(!TryTakeAlignedBatches(multiBinders, BatchSize, out var firstBatch, out var batches)){
+					break;
 				}
-			}finally{
-				if(finalBatchCmd != null && !ReferenceEquals(finalBatchCmd, fullBatchCmd)){
-					await finalBatchCmd.DisposeAsync();
-				}
-				if(fullBatchCmd != null){
-					await fullBatchCmd.DisposeAsync();
+				var cnt = (u64)firstBatch.Count;
+
+				var curCmd = await z.Prepare(Ctx, Sql.DuplicateSql(cnt), Ct);
+
+				var args = BuildArgsForBatch(oneBinders, multiBinders, batches);
+
+				await foreach(var row in YieldRowsOrNull(curCmd, args, Ct)){
+					yield return row;
 				}
 			}
 		}
@@ -349,59 +313,40 @@ public static class ExtnISqlCmdMkr{
 			u64 BatchSize,
 			[EnumeratorCancellation] CT Ct
 		){
-			ISqlCmd? fullBatchCmd = null;
-			ISqlCmd? finalBatchCmd = null;
-			try{
-				while(true){
-					// 从第一个异步 binder 取一批
-					var (hasAny, firstBatch) = await manyAsyncBinders[0].TryTakeBatchArgsAsync(BatchSize, Ct);
-					if(!hasAny){
-						break;
-					}
-
-					var cnt = (u64)firstBatch.Count;
-					var asyncBatches = new List<IList>{firstBatch};
-
-					// 从其他异步 binder 取相同数量的值
-					for(var i = 1; i < manyAsyncBinders.Count; i++){
-						var (hasAnyI, batchI) = await manyAsyncBinders[i].TryTakeBatchArgsAsync(cnt, Ct);
-						if(!hasAnyI || (u64)batchI.Count != cnt){
-							throw new InvalidOperationException("ParamAutoBinderAsync.Many(...) length mismatch.");
-						}
-						asyncBatches.Add(batchI);
-					}
-
-					// 准备 SQL 命令
-					ISqlCmd curCmd;
-					if(cnt == BatchSize){
-						fullBatchCmd ??= await z.Prepare(Ctx, Sql.DuplicateSql(BatchSize), Ct);
-						curCmd = fullBatchCmd;
-					}else{
-						if(finalBatchCmd != null && !ReferenceEquals(finalBatchCmd, fullBatchCmd)){
-							await finalBatchCmd.DisposeAsync();
-						}
-						finalBatchCmd = await z.Prepare(Ctx, Sql.DuplicateSql(cnt), Ct);
-						curCmd = finalBatchCmd;
-					}
-
-					// 绑定参数
-					var args = ArgDict.Mk();
-					BindOneBinders(args, oneBinders, cnt);
-					for(var i = 0; i < manyAsyncBinders.Count; i++){
-						manyAsyncBinders[i].BindBatch(args, asyncBatches[i]);
-					}
-
-					// 执行并返回结果
-					await foreach(var row in YieldRowsOrNull(curCmd, args, Ct)){
-						yield return row;
-					}
+			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),
+			// 跨批復用緩存命令在 pg 上會因已釋放而崩(sqlite 因 SqliteCommand 容錯未顯形)
+			while(true){
+				// 从第一个异步 binder 取一批
+				var (hasAny, firstBatch) = await manyAsyncBinders[0].TryTakeBatchArgsAsync(BatchSize, Ct);
+				if(!hasAny){
+					break;
 				}
-			}finally{
-				if(finalBatchCmd != null && !ReferenceEquals(finalBatchCmd, fullBatchCmd)){
-					await finalBatchCmd.DisposeAsync();
+
+				var cnt = (u64)firstBatch.Count;
+				var asyncBatches = new List<IList>{firstBatch};
+
+				// 从其他异步 binder 取相同数量的值
+				for(var i = 1; i < manyAsyncBinders.Count; i++){
+					var (hasAnyI, batchI) = await manyAsyncBinders[i].TryTakeBatchArgsAsync(cnt, Ct);
+					if(!hasAnyI || (u64)batchI.Count != cnt){
+						throw new InvalidOperationException("ParamAutoBinderAsync.Many(...) length mismatch.");
+					}
+					asyncBatches.Add(batchI);
 				}
-				if(fullBatchCmd != null){
-					await fullBatchCmd.DisposeAsync();
+
+				// 准备 SQL 命令
+				var curCmd = await z.Prepare(Ctx, Sql.DuplicateSql(cnt), Ct);
+
+				// 绑定参数
+				var args = ArgDict.Mk();
+				BindOneBinders(args, oneBinders, cnt);
+				for(var i = 0; i < manyAsyncBinders.Count; i++){
+					manyAsyncBinders[i].BindBatch(args, asyncBatches[i]);
+				}
+
+				// 执行并返回结果
+				await foreach(var row in YieldRowsOrNull(curCmd, args, Ct)){
+					yield return row;
 				}
 			}
 		}

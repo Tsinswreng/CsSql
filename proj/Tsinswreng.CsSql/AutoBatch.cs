@@ -9,11 +9,11 @@ public class AutoBatch<TItem, TRet> : BatchCollector<TItem, TRet> {
 	public static new u64 DfltBatchSize { get; set; } = 100;
 	public ISqlDuplicator SqlDuplicator { get; set; }
 	//public u64 BatchSize;
-	public ISqlCmd FullBatch { get; set; } = null!;
-	public ISqlCmd FinalBatch { get; set; } = null!;
+	/// 當前批的命令(每批新建):reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),
+	/// 跨批復用緩存命令在 pg 上會因已釋放而崩(sqlite 因 SqliteCommand 容錯未顯形)
+	public ISqlCmd SqlCmd { get; set; }
 	public IDbFnCtx Ctx { get; set; }
 	public ISqlCmdMkr SqlCmdMkr { get; set; }
-	public ISqlCmd SqlCmd { get; set; }
 	public static AutoBatch<TItem, TRet> Mk(
 		IDbFnCtx Ctx
 		, ISqlCmdMkr SqlCmdMkr
@@ -36,16 +36,8 @@ public class AutoBatch<TItem, TRet> : BatchCollector<TItem, TRet> {
 		var ArgFn = FnAsy;
 		R.FnAsy = async (Items, Ct) => {
 			var size = (u64)Items.Count;
-			R.SqlCmd = R.FullBatch;
-			var FnGetRepeatedSql = R.SqlDuplicator.DuplicateSql;
-			if ((u64)Items.Count < R.BatchSize) {//不滿一批 即末批
-				R.FinalBatch = await R.SqlCmdMkr.Prepare(R.Ctx, FnGetRepeatedSql(size), Ct);
-				R.SqlCmd = R.FinalBatch;
-			}
-			else if (R.FullBatch == null) { //滿一批但FullBatch未初始化 即首批
-				R.FullBatch = await R.SqlCmdMkr.Prepare(R.Ctx, FnGetRepeatedSql(BatchSize), Ct);
-				R.SqlCmd = R.FullBatch;
-			}
+			R.SqlCmd = await R.SqlCmdMkr.Prepare(R.Ctx, R.SqlDuplicator.DuplicateSql(size), Ct);
+			R.Ctx.AddToDispose(R.SqlCmd); // 保險:執行前拋異常時也回收命令
 			return await ArgFn(R, Items, Ct);
 		};
 		R.Init(R.FnAsy, BatchSize);

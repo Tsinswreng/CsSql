@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- 性能基準共享庫:測量工具 + 基準場景 + 原始執行器接口。
+		DB 無關,不引用 Sqlite/Postgres;各 DB 的原始執行器放在各自 exe 入口項目。 -->
+
+	<ItemGroup>
+		<!-- 測試域(TestKv/強類型 Id/映射器/表定義初始化) -->
+		<ProjectReference Include="../Tsinswreng.CsSql.Test/Tsinswreng.CsSql.Test.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -15,6 +15,8 @@ naming rules:
 - Delete -> Del
 
 - NOT support auto increment id for insert operation.
+- support database-generated id: mark the column with `IsDbGenerated`(via `ColMkr.DbGenerated()`),
+  then INSERT skips that column and generated ids are returned in `IRespBatInsert<TId>.GeneratedIds`.
 - throw exception if insert or update fails.
 - update will match the primary key of the entity as benchmark.
 
@@ -74,9 +76,12 @@ public partial interface IRepo<TEntity, TId>{
 	);
 	
 	
-	[Doc(@$"
+	[Doc($$"""
 	should throw exception if conflict (e.g constraint violation) etc.
-	")]
+	#Desc[
+	//TODO 自增ID, (id)=>{} 回調可在Ctx中註冊 未實現
+	]
+	""")]
 	public Task<IRespBatInsert> OrdAdd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);

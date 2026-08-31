@@ -110,6 +110,14 @@ public static class ExtnColMkr{
 			return z;
 		}
 
+		/// 標記該列爲數據庫生成列(自增/IDENTITY 等)。
+		/// 標記後:INSERT 時該列不寫入、值由數據庫生成;建表 DDL 由各 DB 生成對應自增語法。
+		public Self DbGenerated(
+		){
+			z.Column.IsDbGenerated = true;
+			return z;
+		}
+
 
 	/// 見 HasConversionʹ註
 	/// 用強轉 轉作Func<object?, object?>。

@@ -1,4 +1,4 @@
-namespace Tsinswreng.CsSql;
+﻿namespace Tsinswreng.CsSql;
 
 using System.Data;
 
@@ -260,19 +260,19 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 		return Run();
 	}
 
-	private IAsyncEnumerable<TAgg?> BatGetAggByIdCore<TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+	// ■ 一批聚合查核心(吃 IList)——「一批」的定義:一次完整聚合查的 Id 規模。
+// 語義承諾:按入參 OrderedBatchIds 位置對齊組裝聚合(查無補 null、重複 Id 出重複聚合);
+// 本方法只負責「這一批怎麼查齊並組裝」,不負責把流切批——切批由調用方(Batches 原語)決定。
+// 由原 BatGetAggByIdCore 的閉包 HandleOneBatch 提升而來(樣板 ④),行為不變。
+	private async Task<IList<TAgg?>> HandleOneBatch<TAgg>(
+		IDbFnCtx Ctx
 		,bool WithDel
+		,IList<TId> OrderedBatchIds
 		,CT Ct
 	)
 		where TAgg: class
 	{
-		async IAsyncEnumerable<TId> ToAsyncIds(IEnumerable<TId> Src){
-			foreach(var id in Src){
-				yield return id;
-			}
-		}
-
+		// 防禦性校驗:聚合註冊表的根類型必須與當前 Repo 的實體/主鍵一致,不一致是註冊期錯誤、立即拋出
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
 			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
@@ -281,100 +281,91 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
 
-		u64 InBatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
-
-		async Task<IList<TAgg?>> HandleOneBatch(IList<TId> OrderedBatchIds, CT Ct){
-			var rootsAsy = GetManyInIdCore(Ctx, ToAsyncIds(OrderedBatchIds), WithDel, Ct);
-			var rootById = new Dictionary<object, TEntity>();
-			var rootIdSet = new HashSet<TId>();
-			await foreach(var root in rootsAsy.WithCancellation(Ct)){
-				if(root is null){
-					continue;
-				}
-				var keyObj = aggReg.FnGetIdFromRootObj(root);
-				if(keyObj is null){
-					continue;
-				}
-				if(keyObj is not TId key){
-					throw new Exception($"Agg root key type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, Key={keyObj.GetType()}, ExpectedKey={typeof(TId)}");
-				}
-				rootById[key] = root;
-				rootIdSet.Add(key);
+		async IAsyncEnumerable<TId> ToAsyncIds(IEnumerable<TId> Src){
+			foreach(var id in Src){
+				yield return id;
 			}
+		}
 
-			var qryCtx = new AggQryCtx();
-			if(rootIdSet.Count > 0){
-				var rootIds = rootIdSet.ToList();
-				var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
-				foreach(var include in aggReg.Includes){
-					var slctByIn = await FnScltAggIncludeByColInVals<TId>(
-						Ctx,
-						include.Tbl,
-						include.FKeyCodeCol,
-						optQry,
-						WithDel,
-						Ct
-					);
-					var dbAsy = slctByIn(rootIds, Ct);
-					await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
-						var codeDict = include.Tbl.ToCodeDict(dbDict);
-						var entity = include.FnNewEntityObj();
-						include.Tbl.AssignEntityByCodeDict(include.EntityType, entity, codeDict);
-						var keyObj = include.FnFKeyToRootIdObj(entity);
-						if(keyObj is null){
-							continue;
-						}
-						if(include.RelKind == EAggRelKind.OneToOne
-							&& qryCtx.GetOne(include.EntityType, keyObj) is not null
-						){
-							throw new Exception($"OneToOne include got duplicate rows. Agg={typeof(TAgg)}, Include={include.EntityType}, Key={keyObj}");
-						}
-						qryCtx.Add(include.EntityType, keyObj, entity);
+		// step 1:根實體 IN 查(查無的行自然缺席),建立 id→root 字典與去重後的根 id 集合
+		// (用字典是為了 step 3 按入參順序快速回查;查無的 id 不進字典,step 3 補 null)
+		var rootsAsy = GetManyInIdCore(Ctx, ToAsyncIds(OrderedBatchIds), WithDel, Ct);
+		var rootById = new Dictionary<object, TEntity>();
+		var rootIdSet = new HashSet<TId>();
+		await foreach(var root in rootsAsy.WithCancellation(Ct)){
+			if(root is null){
+				continue;
+			}
+			var keyObj = aggReg.FnGetIdFromRootObj(root);
+			if(keyObj is null){
+				continue;
+			}
+			if(keyObj is not TId key){
+				throw new Exception($"Agg root key type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, Key={keyObj.GetType()}, ExpectedKey={typeof(TId)}");
+			}
+			rootById[key] = root;
+			rootIdSet.Add(key);
+		}
+
+		// step 2:include 資產查——只針對 step 1 查到的根(去重集合),逐個 include 表按 FKey IN 取資產
+		// OneToOne 資產若同一根查出兩行,視為數據不一致、立即拋出(不返回半吊子聚合)
+		var qryCtx = new AggQryCtx();
+		if(rootIdSet.Count > 0){
+			var rootIds = rootIdSet.ToList();
+			var optQry = new OptQry{ InParamCnt = (u64)rootIds.Count };
+			foreach(var include in aggReg.Includes){
+				var slctByIn = await FnScltAggIncludeByColInVals<TId>(
+					Ctx,
+					include.Tbl,
+					include.FKeyCodeCol,
+					optQry,
+					WithDel,
+					Ct
+				);
+				var dbAsy = slctByIn(rootIds, Ct);
+				await foreach(var dbDict in dbAsy.WithCancellation(Ct)){
+					var codeDict = include.Tbl.ToCodeDict(dbDict);
+					var entity = include.FnNewEntityObj();
+					include.Tbl.AssignEntityByCodeDict(include.EntityType, entity, codeDict);
+					var keyObj = include.FnFKeyToRootIdObj(entity);
+					if(keyObj is null){
+						continue;
 					}
-				}
-			}
-
-			var ans = new List<TAgg?>(OrderedBatchIds.Count);
-			foreach(var id in OrderedBatchIds){
-				if(!rootById.TryGetValue(id!, out var root)){
-					ans.Add(null);
-					continue;
-				}
-				var agg = (TAgg)aggReg.FnAssembleAggObj(root, qryCtx);
-				ans.Add(agg);
-			}
-			return ans;
-		}
-
-		async IAsyncEnumerable<TAgg?> Fn(IAsyncEnumerable<TAgg?> Src){
-			await foreach(var item in Src.WithCancellation(Ct)){
-				yield return item;
-			}
-		}
-
-		async IAsyncEnumerable<TAgg?> Run(){
-			var batchIds = new List<TId>((i32)InBatchSize);
-			await foreach(var id in Ids.WithCancellation(Ct)){
-				batchIds.Add(id);
-				if((u64)batchIds.Count < InBatchSize){
-					continue;
-				}
-				var batchAns = await HandleOneBatch(batchIds, Ct);
-				foreach(var item in batchAns){
-					yield return item;
-				}
-				batchIds = new List<TId>((i32)InBatchSize);
-			}
-
-			if(batchIds.Count > 0){
-				var batchAns = await HandleOneBatch(batchIds, Ct);
-				foreach(var item in batchAns){
-					yield return item;
+					if(include.RelKind == EAggRelKind.OneToOne
+						&& qryCtx.GetOne(include.EntityType, keyObj) is not null
+					){
+						throw new Exception($"OneToOne include got duplicate rows. Agg={typeof(TAgg)}, Include={include.EntityType}, Key={keyObj}");
+					}
+					qryCtx.Add(include.EntityType, keyObj, entity);
 				}
 			}
 		}
 
-		return Fn(Run());
+		// step 3:按入參順序組裝——查無的補 null,保證出參與入參位置一一對應(Ord 語義)
+		var ans = new List<TAgg?>(OrderedBatchIds.Count);
+		foreach(var id in OrderedBatchIds){
+			if(!rootById.TryGetValue(id!, out var root)){
+				ans.Add(null);
+				continue;
+			}
+			var agg = (TAgg)aggReg.FnAssembleAggObj(root, qryCtx);
+			ans.Add(agg);
+		}
+		return ans;
+	}
+
+	// 流式版核心:原手搓分批(Run 循環)整個換成批原語——批大小用 IN 段策略;
+	// 每批 = 一次完成「根+全部資產」的聚合查(見 HandleOneBatch),批間出參順序承襲入參批順序。
+	private IAsyncEnumerable<TAgg?> BatGetAggByIdCore<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,bool WithDel
+		,CT Ct
+	)
+		where TAgg: class
+	{
+		return SqlFlow.Batches<TId, TAgg?>(Ids, async(BatIds, Ct2)=>{
+			return await HandleOneBatch<TAgg>(Ctx, WithDel, BatIds, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
 	}
 	
 	public IAsyncEnumerable<TEntity?> GetInId(
@@ -410,11 +401,41 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 		return BatGetByIdCore(Ctx, Ids, false, Ct);
 	}
 
+	// ■ 批一級形狀(IList 版 OrdGetByIdWithDel,含軟刪):整個 List 一次 IN 查回,位置對齊。
+	// 函數邊界 = 批邊界:傳多大的 List 就查多大的 IN(參數規模的兜底分段由執行層負責);
+	// 語義承諾:出參與入參一一對應、重複 Id 出重複實體、查無補 null、空列表直接返回空。
+	public async Task<IList<TEntity?>> OrdGetByIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		var ans = new List<TEntity?>(Ids.Count);
+
+		// 空列表短路:不發 SQL,直接返回(IN () 在部分 DB 上不合法,故必須提前返回)
+		if(Ids.Count == 0){
+			return ans;
+		}
+
+		// step 1:拼一次 IN 查詢(Many 走同步重載,把整個 List 展成一個 IN 條件)
+		var Sql = T.SqlSplicer().Select("*").From().Where1()
+		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
+		// WithDel=true:含軟刪,故不加非刪過濾。
+
+		// step 2:執行並按入參順序收結果——RunDupliSql 承諾「查無的入參位置補 null」,故直接逐行攤進 ans
+		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
+		await foreach(var dict in dicts.WithCancellation(Ct)){
+			ans.Add(dict is null ? null : T.DbDictToEntity<TEntity>(dict));
+		}
+		return ans;
+	}
+
+	// ■ 流式版 OrdGetByIdWithDel:批原語(IN 段批大小)把來源流切塊,逐塊調 IList 版;
+	// 出參流與入參流位置一一對應(每個回調內部保持 Ord 補 null 語義,批與批之間保持批序)。
 	public IAsyncEnumerable<TEntity?> OrdGetByIdWithDel(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
-		return BatGetByIdCore(Ctx, Ids, true, Ct);
+		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
+			return await OrdGetByIdWithDel(Ctx, BatIds, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
 	}
 
 	public IAsyncEnumerable<TEntity> GetAll(
@@ -450,6 +471,18 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 		return BatGetAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
 	}
 
+	// ■ 批一級形狀(IList 版 OrdGetAggByIdWithDel):交給「一批聚合查核心」整批一次完成(含軟刪)。
+	// 函數邊界 = 批邊界:內部零分批,傳多大的 List 就做多大的聚合查(IN 段規模由核心/執行層兜底)。
+	// 語義:位置一一對應、查無補 null(見 HandleOneBatch 的三步與 step 3 的組裝規則)。
+	public async Task<IList<TAgg?>> OrdGetAggByIdWithDel<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	)
+		where TAgg: class
+	{
+		return await HandleOneBatch<TAgg>(Ctx, true, Ids, Ct);
+	}
+
+	// 流式版 OrdGetAggByIdWithDel:經 BatGetAggByIdCore(Batches 原語切批)逐批完成聚合查。
 	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
@@ -573,47 +606,47 @@ Func<
 		return await Fn(Tbl, FnMemb, KeyList, Ct);
 	}
 
+		// ■ 批內核心(一批 = 一次同構批量 INSERT):自原 BatchCollector 回調體原樣提升,吃 IList(樣板 ①)。
+	// 「一批」的粒度語義:進來的 List 有多長,就拼多長的同構批量 SQL、一次命令寫完。
+	// 它不知道批大小/切批——那是調用方(原語)的職責;它只承諾「把我拿到的這批原子地寫完」。
+	// SQL 不走手拼:多值組 INSERT 子句由庫工具 `InsertManyClause` 生成
+	// (參數名自動帶 `__組號` 後綴,如 @Word__0/@Word__1),綁參用同源的 `NumFieldParam` 對齊。
+	private async Task<nil> BatOrdAddCore(IDbFnCtx Ctx, IList<TEntity> BatEnts, CT Ct){
+		var Cnt = (u64)BatEnts.Count;
+
+		// 拼 SQL:一行多值組 INSERT(庫生成子句,不再手拼 VALUES 循環)
+		var Sql = $"INSERT INTO {T.Qt(T.DbTblName)} {T.InsertManyClause(T.Columns.Keys, Cnt)}";
+
+		// 綁參:與 InsertManyClause 的佔位(`NumFieldParam(field, i)` = `field__i`)同源,按名對齊
+		var Arg = new Dictionary<str, obj?>();
+		for(i32 i = 0; i < BatEnts.Count; i++){
+			var Ent = BatEnts[i];
+			var DbDict = T.ToDbDict(T.EntityToCodeDict(Ent));
+			foreach(var (k, v) in DbDict){
+				Arg[T.NumFieldParam(k, (u64)i).Name] = v;
+			}
+		}
+
+		// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		await Cmd.RawArgs(Arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		return NIL;
+	}
+
+	// ■ 批一級形狀(IList 版 OrdAdd):函數邊界 = 批邊界——把傳進來的整個 List 一次同構批量寫完。
+	// 語義承諾:返回 = 本批全部生效(約束衝突直接拋);空列表視為無操作、返回成功。
+	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+		if(Ents.Count > 0){
+			await BatOrdAddCore(Ctx, Ents, Ct);
+		}
+		return new RespBatInsert();
+	}
+
+	// ■ 流式版 OrdAdd:批原語(批大小 = 庫默認 sqlite 1 / pg 500)把來源流切塊,
+	// 逐塊交給批內核心(Hence 每個事務內等價於原 BatchCollector 行為:sqlite 一單元一寫、pg 一單元 500 寫)。
 	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
-		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		var Cols = T.Columns.Keys.ToList();
-		str MkSql(u64 Cnt){
-			var Stmts = new List<str>((i32)Cnt);
-			foreach(var i in Enumerable.Range(0, (i32)Cnt)){
-				var Idx = (u64)i;
-				var Fields = str.Join(", ", Cols.Select(x=>T.QtCol(x)));
-				var Values = str.Join(", ", Cols.Select(x=>T.NumFieldParam(x, Idx).ToString()));
-				Stmts.Add($"INSERT INTO {T.Qt(T.DbTblName)} ({Fields}) VALUES ({Values})");
-			}
-			return str.Join(";\n", Stmts);
-		}
-
-		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
-			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
-			Ctx.AddToDispose(Cmd);
-			return Cmd;
-		}
-
-		await using var Batch = new BatchCollector<TEntity, nil>(async(BatchEnts, Ct)=>{
-			var Cnt = (u64)BatchEnts.Count;
-			var Arg = new Dictionary<str, obj?>();
-			for(i32 i = 0; i < BatchEnts.Count; i++){
-				var Ent = BatchEnts[i];
-				var DbDict = T.ToDbDict(T.EntityToCodeDict(Ent));
-				foreach(var (k, v) in DbDict){
-					Arg[T.NumFieldParam(k, (u64)i).Name] = v;
-				}
-			}
-			var Cmd = await GetCmd(Cnt, Ct);
-			await Cmd.RawArgs(Arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
-			return NIL;
-		}, BatchSize);
-
-		await foreach(var Ent in Ents.WithCancellation(Ct)){
-			await Batch.Add(Ent, Ct);
-		}
-		await Batch.End(Ct);
-
+		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
 		return new RespBatInsert();
 	}
 
@@ -669,13 +702,30 @@ Func<
 		return new RespUpd();
 	}
 
-	public async Task<IRespBatUpd> OrdUpdByDbDict(
-		IDbFnCtx Ctx
-		,IAsyncEnumerable<TId> Ids
-		,IAsyncEnumerable<IStr_Any> Dicts
-		,CT Ct
+	// ■ 批內核心(一批 Update by Db Dict):自原 BatchCollector 回調體原樣提升,吃 IList(樣板 ③)。
+	// 入參是成對的 (Dict, Id) 列表;「一批」= 把每對拼成一條 UPDATE,同一次命令執行完。
+	//
+	// ★ 支持異構字典:每對 Dict 的鍵集(要更新的列集)可以互不相同——
+	//   例:[{A,B},{A},{B,C}] 是合法的,每行按自己有的列生成 SET 子句、缺的列不動。
+	//   這是有意保留的語義(原實現即如此,業務上批量更新「列集不一」的場景需要它)。
+	//
+	// ★ 爲甚麼本方法必須逐對手拼 SQL、不能走 AutoBatch + FnSqlDuplicator 的模板重複:
+	//   - AutoBatch/Duplicator 的模型是「同一條 SQL 模板按批大小重複 N 份」,只支持同構
+	//     (每份的 SET 列集必須一致);
+	//   - 模板化時,生成 SQL 的規則只被告知「本批有幾個元素」(Size),不知道每份要更新哪些列;
+	//   - 異構下每條 UPDATE 的 SET 子句列集不同,只有等整批元素到手、逐對看過 Dict 鍵集
+	//     才能拼出本批的 SQL——因此「收集、切批、尾批」等一批的骨架交給原語/BatchCollector,
+	//     而「本批 SQL 文本 + 參數」這部分必須手拼,這是異構語義的必然形狀,不是重複造輪子。
+	//   - SET 段庫工具有 `ITable.UpdateClause(fields)`,但它生成的是無序前綴的 `col = @col`,
+	//     定位在「單條語句的 SET」;本方法把 N 對合併進同一個多語句命令,參數名必須帶對序
+	//     前綴(u_{i}_ / id_{i})才能避免跨對衝突 → UpdateClause 佔不上去。列引用仍用庫的
+	//     QtCol、參數名用 Prm,不是裸拼字符串。
+	//   若日後業務確認「同構」即可(每批鍵集一致),可整段換成 AutoBatch + 模板 duplicator 簡化。
+	//
+	// 語義承諾:數據列為空的對被跳過;寫不寫一律拚入同一命令(原子落地或整體拋錯)。
+	private async Task<nil> BatOrdUpdByDbDictCore(
+		IDbFnCtx Ctx, IList<(IStr_Any Dict, TId Id)> BatchItems, CT Ct
 	){
-		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var dbIdColName = T.DbColName(T.CodeIdName);
 
 		async Task<ISqlCmd> GetCmd(str Sql, CT Ct){
@@ -685,59 +735,100 @@ Func<
 			return Cmd;
 		}
 
-		await using var Batch = new BatchCollector<(IStr_Any Dict, TId Id), nil>(async(BatchItems, Ct)=>{
-			var Stmts = new List<str>(BatchItems.Count);
-			var Arg = new Dictionary<str, obj?>();
+		var Stmts = new List<str>(BatchItems.Count);
+		var Arg = new Dictionary<str, obj?>();
 
-			for(i32 i = 0; i < BatchItems.Count; i++){
-				var (DbDict, Id) = BatchItems[i];
-				var SetSegs = new List<str>();
-				i32 j = 0;
-				foreach(var (DbColName, RawVal) in DbDict){
-					if(DbColName == dbIdColName || DbColName == T.CodeIdName){
-						continue;
-					}
-					var P = T.Prm($"u_{i}_{j}");
-					SetSegs.Add($"{T.Qt(DbColName)} = {P}");
-					Arg[P.Name] = RawVal;
-					j++;
-				}
-
-				if(SetSegs.Count == 0){
+		// step 1:逐對拼 UPDATE——每對一個參數前綴(u_{i}_ / id_{i}),避免跨對參數名衝突
+		// (庫的 UpdateClause 無對序前綴、只夠單條語句;異構又阻斷模板偏移,理由見方法頭註)
+		for(i32 i = 0; i < BatchItems.Count; i++){
+			var (DbDict, Id) = BatchItems[i];
+			var SetSegs = new List<str>();
+			i32 j = 0;
+			// 只取數據列:主鍵列(無論 Db 拼法還是代碼拼法)不允許出現在 SET 裏
+			foreach(var (DbColName, RawVal) in DbDict){
+				if(DbColName == dbIdColName || DbColName == T.CodeIdName){
 					continue;
 				}
-
-				var PId = T.Prm($"id_{i}");
-				Arg[PId.Name] = T.UpperToRaw(Id, T.CodeIdName);
-				var Clause = str.Join(", ", SetSegs);
-				Stmts.Add($"UPDATE {T.Qt(T.DbTblName)} SET {Clause} WHERE {T.QtCol(T.CodeIdName)} = {PId}");
+				var P = T.Prm($"u_{i}_{j}");
+				SetSegs.Add($"{T.Qt(DbColName)} = {P}");
+				Arg[P.Name] = RawVal;
+				j++;
 			}
 
-			if(Stmts.Count == 0){
-				return NIL;
+			// 全空 Dict(沒有可更新列):整對跳過,不產出 UPDATE 也不報錯
+			if(SetSegs.Count == 0){
+				continue;
 			}
 
-			var Sql = str.Join(";\n", Stmts);
-			var Cmd = await GetCmd(Sql, Ct);
-			await Cmd.RawArgs(Arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			var PId = T.Prm($"id_{i}");
+			Arg[PId.Name] = T.UpperToRaw(Id, T.CodeIdName);
+			var Clause = str.Join(", ", SetSegs);
+			Stmts.Add($"UPDATE {T.Qt(T.DbTblName)} SET {Clause} WHERE {T.QtCol(T.CodeIdName)} = {PId}");
+		}
+
+		// 沒有可更新的對:空操作返回(不發 SQL)
+		if(Stmts.Count == 0){
 			return NIL;
-		}, BatchSize);
+		}
 
+		// step 2:全部 UPDATE 拼成一條命令,一次執行(本批在此落地)
+		var Sql = str.Join(";\n", Stmts);
+		var Cmd2 = await GetCmd(Sql, Ct);
+		await Cmd2.RawArgs(Arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		return NIL;
+	}
+
+	// ■ 批一級形狀(IList 版 OrdUpdByDbDict):Ids 與 Dicts 成對,整批一次 UPDATE 寫完。
+	// 語義承諾:
+	// - Ids 與 Dicts 長度不等即拋 ArgumentException(不執行任何 UPDATE);
+	// - 支持異構字典:每對 Dict 的鍵集可不同,各行按自己有的列更新(詳見 BatOrdUpdByDbDictCore 頭註);
+	// - 批大小/切批不在此層(交由原語/調用方)。
+	public async Task<IRespBatUpd> OrdUpdByDbDict(
+		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
+	){
+		// 入參一致性校驗:兩列表必須逐位對應,否則拒絕執行
+		if(Ids.Count != Dicts.Count){
+			throw new ArgumentException("Dicts count must equal to Ids count");
+		}
+
+		// 成對組裝後交給批內核心(逐對拼 SQL 的細節在核心內)
+		var Pairs = new List<(IStr_Any Dict, TId Id)>(Ids.Count);
+		for(i32 i = 0; i < Ids.Count; i++){
+			Pairs.Add((Dicts[i], Ids[i]));
+		}
+		if(Pairs.Count > 0){
+			await BatOrdUpdByDbDictCore(Ctx, Pairs, Ct);
+		}
+		return new RespUpd();
+	}
+
+	// ■ 流式版 OrdUpdByDbDict:兩條來源流先按位 zip 成對(長度不等即拋,防錯位),
+	// 再交給批原語切塊、逐塊調批內核心——雙流成對的語義在 zip 層保證,原語只管切批。
+	public async Task<IRespBatUpd> OrdUpdByDbDict(
+		IDbFnCtx Ctx
+		,IAsyncEnumerable<TId> Ids
+		,IAsyncEnumerable<IStr_Any> Dicts
+		,CT Ct
+	){
 		await using var DictEtor = Dicts.GetAsyncEnumerator(Ct);
 		await using var IdEtor = Ids.GetAsyncEnumerator(Ct);
-		while(true){
-			var HasDict = await DictEtor.MoveNextAsync();
-			var HasId = await IdEtor.MoveNextAsync();
-			if(HasDict != HasId){
-				throw new ArgumentException("Dicts count must equal to Ids count");
-			}
-			if(!HasDict){
-				break;
-			}
-			await Batch.Add((DictEtor.Current, IdEtor.Current), Ct);
-		}
-		await Batch.End(Ct);
 
+		// 惰性 zip:每次同時推進兩個枚舉器,任一流先結束即視為長度不等、拋錯
+		async IAsyncEnumerable<(IStr_Any Dict, TId Id)> Zip(){
+			while(true){
+				var HasDict = await DictEtor.MoveNextAsync();
+				var HasId = await IdEtor.MoveNextAsync();
+				if(HasDict != HasId){
+					throw new ArgumentException("Dicts count must equal to Ids count");
+				}
+				if(!HasDict){
+					break;
+				}
+				yield return (DictEtor.Current, IdEtor.Current);
+			}
+		}
+
+		await SqlFlow.BatchesInOnly(Zip(), (Items, Ct2)=> BatOrdUpdByDbDictCore(Ctx, Items, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
 		return new RespUpd();
 	}
 	
@@ -757,7 +848,7 @@ Func<
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
-		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
+		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul; //TODO
 		var valToSet = T.SoftDelCol.FnDelete(null);
 
 		str MkSql(u64 Cnt){

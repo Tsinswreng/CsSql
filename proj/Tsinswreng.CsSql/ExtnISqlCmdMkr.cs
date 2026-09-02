@@ -136,7 +136,7 @@ public static class ExtnISqlCmdMkr{
 				if(z.DbSrcType.Eq(EDbSrcType.Sqlite)){
 					BatchSize = 1;
 				}else{
-					BatchSize = 500;
+					BatchSize = 500; //TODO 不雅
 				}
 			}
 			return CsSql.AutoBatch<TItem, TRet>.Mk(Ctx, z, SqlDuplicator, FnAsy, BatchSize);

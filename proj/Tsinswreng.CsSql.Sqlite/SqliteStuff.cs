@@ -4,7 +4,7 @@ using Tsinswreng.CsSql;
 public class SqliteStuff:IDbStuff{
 	public static SqliteStuff Inst => field??=new SqliteStuff();
 	public EDbSrcType DbSrcType{get;set;} = EDbSrcType.Sqlite;
-	public ISqlDialect SqlDialect{get;set;} = SqliteSqlMkr.Inst;
+	public ISqlDialect SqlDialect{get;set;} = SqliteSqlDialect.Inst;
 	
 	public IDbValConvtr DbValConvtr{get;set;} = SqliteValConvtr.Inst;
 	public IOptBatch DfltOptBatch{get;set;} = new OptBatch(){

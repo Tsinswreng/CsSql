@@ -1,11 +1,11 @@
 namespace Tsinswreng.CsSql.Sqlite;
 
-public partial class SqliteSqlMkr
+public partial class SqliteSqlDialect
 	:ISqlDialect
 {
 	public EDbSrcType DbSrcType => EDbSrcType.Sqlite;
 	//protected static SqliteSqlMkr? _Inst = null;
-	public static SqliteSqlMkr Inst => field??= new SqliteSqlMkr();
+	public static SqliteSqlDialect Inst => field??= new SqliteSqlDialect();
 	public ISqlTypeMapper SqlTypeMapper{get;set;} = SqliteTypeMapper.Inst;
 
 	public str Quote(str Name){

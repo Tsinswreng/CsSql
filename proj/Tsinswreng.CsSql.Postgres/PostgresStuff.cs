@@ -4,7 +4,7 @@ using Tsinswreng.CsSql;
 public class PostgresStuff:IDbStuff{
 	public static PostgresStuff Inst => field??= new PostgresStuff();
 	public EDbSrcType DbSrcType{get;set;} = EDbSrcType.Postgres;
-	public ISqlDialect SqlDialect{get;set;} = PostgresSqlMkr.Inst;
+	public ISqlDialect SqlDialect{get;set;} = PostgresSqlDialect.Inst;
 	public IDbValConvtr DbValConvtr{get;set;} = PostgresValConvtr.Inst;
 	public IOptBatch DfltOptBatch{get;set;} = new OptBatch(){
 		

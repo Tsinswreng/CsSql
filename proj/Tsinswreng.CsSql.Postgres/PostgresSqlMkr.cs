@@ -1,10 +1,10 @@
 namespace Tsinswreng.CsSql.Postgres;
 
-public partial class PostgresSqlMkr
+public partial class PostgresSqlDialect
 	:ISqlDialect
 {
-	protected static PostgresSqlMkr? _Inst = null;
-	public static PostgresSqlMkr Inst => _Inst??= new PostgresSqlMkr();
+	protected static PostgresSqlDialect? _Inst = null;
+	public static PostgresSqlDialect Inst => _Inst??= new PostgresSqlDialect();
 	public ISqlTypeMapper SqlTypeMapper{get;set;} = PostgresTypeMapper.Inst;
 	public EDbSrcType DbSrcType => EDbSrcType.Postgres;
 

@@ -1,7 +1,7 @@
 namespace Tsinswreng.CsSql.Sqlite;
 
 public partial class SqliteSqlMkr
-	:ISqlMkr
+	:ISqlDialect
 {
 	public EDbSrcType DbSrcType => EDbSrcType.Sqlite;
 	//protected static SqliteSqlMkr? _Inst = null;

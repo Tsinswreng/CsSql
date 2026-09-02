@@ -42,7 +42,7 @@ $"""
 SELECT * FROM {T.Qt(T.DbTblName)}
 WHERE 1=1
 ORDER BY {T.QtCol(PCreatedMs)} DESC
-{T.SqlMkr.ParamLimOfst(out var Lim, out var Ofst)}
+{T.SqlDialect.ParamLimOfst(out var Lim, out var Ofst)}
 """;
 		var Cmd = await SqlCmdMkr.Prepare(Ctx, Sql, Ct);
 		return async (Ct)=>{

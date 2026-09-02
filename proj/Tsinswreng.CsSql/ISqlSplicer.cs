@@ -227,7 +227,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	}
 	
 	public ISqlSplicer<E> Lim(u64 Limit){
-		var seg = Tbl.SqlMkr.LimOfst(Limit+"", null);
+		var seg = Tbl.SqlDialect.LimOfst(Limit+"", null);
 		return AddSeg(seg);
 	}
 

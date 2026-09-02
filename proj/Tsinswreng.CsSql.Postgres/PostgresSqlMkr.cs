@@ -1,7 +1,7 @@
 namespace Tsinswreng.CsSql.Postgres;
 
 public partial class PostgresSqlMkr
-	:ISqlMkr
+	:ISqlDialect
 {
 	protected static PostgresSqlMkr? _Inst = null;
 	public static PostgresSqlMkr Inst => _Inst??= new PostgresSqlMkr();

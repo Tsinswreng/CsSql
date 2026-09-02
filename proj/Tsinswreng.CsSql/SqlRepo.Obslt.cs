@@ -49,7 +49,7 @@ $"SELECT COUNT(*) AS {T.Qt(NCnt)} FROM {T.Qt(T.DbTblName)}";
 		var T = TblMgr.GetTbl<TEntity>();
 		var Sql = $"""
 		SELECT * FROM {T.Qt(T.DbTblName)}
-		{T.SqlMkr.ParamLimOfst(out var Lim, out var Ofst)}
+		{T.SqlDialect.ParamLimOfst(out var Lim, out var Ofst)}
 		""";
 		var CountAll = await FnCount(Ctx, Ct);
 		var Cmd = await Ctx.PrepareToDispose(SqlCmdMkr, Sql, Ct);

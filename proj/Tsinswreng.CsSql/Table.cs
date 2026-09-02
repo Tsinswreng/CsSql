@@ -175,7 +175,7 @@ public partial class Table:ITable{
 	#endif
 
 	[Impl]
-	public ISqlMkr SqlMkr => DbStuff.SqlMkr;
+	public ISqlDialect SqlDialect => DbStuff.SqlDialect;
 
 	[Impl]
 	public IList<str> InnerAdditionalSqls{get;set;}

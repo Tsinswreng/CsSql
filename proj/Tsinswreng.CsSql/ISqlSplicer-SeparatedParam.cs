@@ -44,7 +44,7 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return And(GetMember, "=", out Param);
 	}
 	public ISqlSplicer<E> LimOfst(out IParam Lim, out IParam Ofst){
-		var seg = Tbl.SqlMkr.ParamLimOfst(out Lim, out Ofst);
+		var seg = Tbl.SqlDialect.ParamLimOfst(out Lim, out Ofst);
 		AddSeg(seg);
 		return this;
 	}

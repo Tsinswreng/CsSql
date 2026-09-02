@@ -17,7 +17,7 @@ public static class ExtnITable {
 		public str Qt(
 			str s
 		) {
-			return z.SqlMkr.Quote(s);
+			return z.SqlDialect.Quote(s);
 		}
 
 		/// 宜用此㕥取列 無旹自有報錯ʹ訊
@@ -53,7 +53,7 @@ public static class ExtnITable {
 			str CodeColName
 		) {
 			var dbColName = z.DbColName(CodeColName);
-			return z.SqlMkr.Quote(dbColName);
+			return z.SqlDialect.Quote(dbColName);
 		}
 
 		[Doc(@$"
@@ -118,7 +118,7 @@ public static class ExtnITable {
 		) {
 			var CodeColName = CodeColNameParam.Name;
 			var DbColName = z.DbColName(CodeColName);
-			return z.SqlMkr.Quote(DbColName);
+			return z.SqlDialect.Quote(DbColName);
 		}
 
 		[Doc($@"
@@ -128,7 +128,7 @@ public static class ExtnITable {
 		public IParam Prm(
 			str Name
 		) {
-			return z.SqlMkr.Param(Name);
+			return z.SqlDialect.Param(Name);
 		}
 
 		[Doc($@"
@@ -139,7 +139,7 @@ public static class ExtnITable {
 			var bytes = Ulid.NewUlid().ToByteArray();
 			var id = ToolU128Id.ByteArrToUInt128(bytes);
 			var Name = ToolU128Id.ToLow64Base(id);
-			return z.SqlMkr.Param("_" + Name);
+			return z.SqlDialect.Param("_" + Name);
 		}
 
 		[Doc($@"
@@ -534,7 +534,7 @@ public static class ExtnITable {
 		public str Eq(
 			str DbColName, IParam Param
 		) {
-			return z.SqlMkr.Eq(DbColName, Param);
+			return z.SqlDialect.Eq(DbColName, Param);
 		}
 
 		[Doc($@"
@@ -573,7 +573,7 @@ public static class ExtnITable {
 						throw new Exception("Col.RawClrType == null");
 					}
 					try {
-						var DbTypeName = z.SqlMkr.SqlTypeMapper.ToDbTypeName(Col.RawClrType);
+						var DbTypeName = z.SqlDialect.SqlTypeMapper.ToDbTypeName(Col.RawClrType);
 						R.Add(DbTypeName);
 					}
 					catch (System.Exception e) {

@@ -14,7 +14,7 @@ public partial interface ITable<T>:ITable{
 public partial interface ITable{
 	public ITblMgr TblMgr{get;set;}
 	public IDbStuff DbStuff => TblMgr.DbStuff;
-	public ISqlMkr SqlMkr=>DbStuff.SqlMkr;
+	public ISqlDialect SqlDialect=>DbStuff.SqlDialect;
 
 	[Doc($@"Accessor manager to read/write entity properties by string keys")]
 	public IPropAccessorReg PropAccessorReg{get;set;}

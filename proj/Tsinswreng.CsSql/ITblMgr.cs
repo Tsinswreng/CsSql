@@ -10,7 +10,7 @@ public partial interface ITblMgr{
 	public IDictionary<Type, IAggReg> AggType_Reg{get;set;}
 	public EDbSrcType DbSrcType=>DbStuff.DbSrcType;
 	public IDbStuff DbStuff{get;set;}
-	public ISqlMkr SqlMkr=>DbStuff.SqlMkr;
+	public ISqlDialect SqlDialect=>DbStuff.SqlDialect;
 
 	public nil AddTbl(ITable Tbl){
 		Tbl.TblMgr = this;

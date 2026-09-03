@@ -1,4 +1,4 @@
-﻿namespace Tsinswreng.CsSql;
+namespace Tsinswreng.CsSql;
 
 using System.Data;
 
@@ -105,6 +105,32 @@ WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(Wi
 		}
 		var dicts = SqlCmdMkr.RunDupliSql(Ctx, Sql, Ct);
 		return dicts.Select(x=>x is null ? null : T.DbDictToEntity<TEntity>(x));
+	}
+
+	// ■ _2 對標（SqlMkr 重寫）：同構批量等值查、位置對齊返回。
+	// 對照：原 BatGetByIdCore 用 SqlSplicer + Boolean Many binder + RunDupliSql；
+	// 新寫法 AndEqEach 收整批 IList（函數邊界 = 批邊界，切批交上游 SqlFlow），
+	// Build 產出 N 條等值語句 ';' 拼進同一命令，AsyE1dWithNull 逐結果集取首行、空補 null、與入參一一對應。
+	private async Task<IList<TEntity?>> BatGetByIdCore_2(
+		IDbFnCtx Ctx, IList<TId> Ids
+		,bool WithDel
+		,CT Ct
+	){
+		var Mk = T.SqlMkr().Select("*").From().Where1()
+			.AndEqEach(T.CodeIdName, Ids);
+		if(!WithDel && T.SoftDelCol is not null){
+			Mk.AndSqlIsNonDel();
+		}
+		var Stmt = Mk.Build();
+
+		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		var Ans = new List<TEntity?>(Ids.Count);
+		await foreach(var Dict in Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1dWithNull(Ct).WithCancellation(Ct)){
+			Ans.Add(Dict is null ? null : T.DbDictToEntity<TEntity>(Dict));
+		}
+		return Ans;
 	}
 
 	private IAsyncEnumerable<TEntity> GetAllCore(
@@ -634,6 +660,21 @@ Func<
 		return NIL;
 	}
 
+	// ■ _2 對標（SqlMkr 重寫）：同構批量 INSERT。
+	// 對照：原 BatOrdAddCore 手拼 InsertManyClause + NumFieldParam 逐格綁參；
+	// 新寫法 Insert 一次聲明列集、AddRows 收整批 CodeDict（函數只管一批），
+	// 列引用/引號/Upper→Raw/參數後綴全部由 SqlMkr 內部完成。
+	private async Task<nil> BatOrdAddCore_2(IDbFnCtx Ctx, IList<TEntity> BatEnts, CT Ct){
+		var Rows = BatEnts.Select(x=>T.EntityToCodeDict(x)).ToList();
+		var Stmt = T.SqlMkr().Insert(T.Columns.Keys).AddRows(Rows).Build();
+
+		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		return NIL;
+	}
+
 	// ■ 批一級形狀(IList 版 OrdAdd):函數邊界 = 批邊界——把傳進來的整個 List 一次同構批量寫完。
 	// 語義承諾:返回 = 本批全部生效(約束衝突直接拋);空列表視為無操作、返回成功。
 	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
@@ -778,6 +819,28 @@ Func<
 		return NIL;
 	}
 
+	// ■ _2 對標（SqlMkr 重寫）：異構字典 UPDATE。
+	// 對照：原 BatOrdUpdByDbDictCore 手拼 `u_{i}_{j}`/`id_{i}` 前綴逐對拼 SET 段（異構語義的必然形狀）；
+	// 新寫法 Update().AddRows 收整批 (Ids, CodeDicts)，異構列集仍逐對自帶（鍵集各異），
+	// 但對序前綴/SET 段/WHERE 段/Upper→Raw 全部由 SqlMkr 內部吸收，業務只剩數據。
+	private async Task<nil> BatOrdUpdByDbDictCore_2(
+		IDbFnCtx Ctx, IList<(IStr_Any Dict, TId Id)> BatchItems, CT Ct
+	){
+		var Ids = new List<obj?>(BatchItems.Count);
+		var Dicts = new List<IStr_Any>(BatchItems.Count);
+		foreach(var (Dict, Id) in BatchItems){
+			Ids.Add(Id);
+			Dicts.Add(Dict);
+		}
+		var Stmt = T.SqlMkr().Update().AddRows(T.CodeIdName, Ids, Dicts).Build();
+
+		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		return NIL;
+	}
+
 	// ■ 批一級形狀(IList 版 OrdUpdByDbDict):Ids 與 Dicts 成對,整批一次 UPDATE 寫完。
 	// 語義承諾:
 	// - Ids 與 Dicts 長度不等即拋 ArgumentException(不執行任何 UPDATE);
@@ -881,6 +944,26 @@ Func<
 		}
 		await Batch.End(Ct);
 		return new SoftDelInId();
+	}
+
+	// ■ _2 對標（SqlMkr 重寫）：軟刪 IN。
+	// 對照：原 SoftDelInId 手拼 `UPDATE ... SET {SoftDelCol} = @__SoftDelVal WHERE Id IN (...)`，
+	//       批大小(sqlite 50/pg 500)由庫層寫死在此方法內；
+	// 新寫法 Delete().SoftIn 一語收口：軟刪值取 SoftDelCol.FnDelete(null) 在 SqlMkr 內部完成，
+	//       函數只管一批 IList（函數邊界 = 批邊界），批大小改由最源頭調用方（SqlFlow）決定，此處不再有 BatchCollector。
+	public async Task<nil> SoftDelInId_2(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count == 0){
+			return NIL;
+		}
+		var Stmt = T.SqlMkr().Delete().SoftIn(T.CodeIdName, Ids).Build();
+
+		// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		return NIL;
 	}
 
 	public async Task<IHardDelInId> HardDelInId(

@@ -33,6 +33,6 @@ public partial class SqlMkrDelete{
 	/// AND 原始 SQL 片段（逃逸通道：多表 DELETE、子查詢條件等）。
 	public partial SqlMkrDelete And(str RawSql);
 
-	/// 拼出 SqlStmt。
-	public partial SqlStmt Build();
+	/// 拼出 ISqlEtArg。
+	public partial ISqlEtArg Build();
 }

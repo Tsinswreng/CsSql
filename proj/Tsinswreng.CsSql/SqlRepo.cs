@@ -110,7 +110,8 @@ WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(Wi
 	// ■ _2 對標（SqlMkr 重寫）：同構批量等值查、位置對齊返回。
 	// 對照：原 BatGetByIdCore 用 SqlSplicer + Boolean Many binder + RunDupliSql；
 	// 新寫法 AndEqEach 收整批 IList（函數邊界 = 批邊界，切批交上游 SqlFlow），
-	// Build 產出 N 條等值語句 ';' 拼進同一命令，AsyE1dWithNull 逐結果集取首行、空補 null、與入參一一對應。
+	// Build 產出 N 條等值語句 ';' 拼一命令，泛型 Get1d 逐結果集回讀——外層 IList 對齊入參、空槽 null、
+	// 實體轉換（DbDictToEntity）由執行端內部吞掉（T 若是 ITable<TEntity> 時 TEntity 自動推斷）。
 	private async Task<IList<TEntity?>> BatGetByIdCore_2(
 		IDbFnCtx Ctx, IList<TId> Ids
 		,bool WithDel
@@ -121,15 +122,8 @@ WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(Wi
 		if(!WithDel && T.SoftDelCol is not null){
 			Mk.AndSqlIsNonDel();
 		}
-		var Stmt = Mk.Build();
-
-		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
-		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
-		Ctx.AddToDispose(Cmd);
-		var Ans = new List<TEntity?>(Ids.Count);
-		await foreach(var Dict in Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1dWithNull(Ct).WithCancellation(Ct)){
-			Ans.Add(Dict is null ? null : T.DbDictToEntity<TEntity>(Dict));
-		}
+		var Ans = await SqlCmdMkr.Get1d(Ctx, T, Mk.Build(), Ct)
+			.ToListAsync(Ct);
 		return Ans;
 	}
 
@@ -663,15 +657,11 @@ Func<
 	// ■ _2 對標（SqlMkr 重寫）：同構批量 INSERT。
 	// 對照：原 BatOrdAddCore 手拼 InsertManyClause + NumFieldParam 逐格綁參；
 	// 新寫法 Insert 一次聲明列集、AddRows 收整批 CodeDict（函數只管一批），
-	// 列引用/引號/Upper→Raw/參數後綴全部由 SqlMkr 內部完成。
+	// 列引用/引號/Upper→Raw/參數後綴全部由 SqlMkr 內部完成，執行端一句 Run 落庫。
 	private async Task<nil> BatOrdAddCore_2(IDbFnCtx Ctx, IList<TEntity> BatEnts, CT Ct){
 		var Rows = BatEnts.Select(x=>T.EntityToCodeDict(x)).ToList();
-		var Stmt = T.SqlMkr().Insert(T.Columns.Keys).AddRows(Rows).Build();
-
-		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
-		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
-		Ctx.AddToDispose(Cmd);
-		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		var EtArg = T.SqlMkr().Insert(T.Columns.Keys).AddRows(Rows).Build();
+		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
 		return NIL;
 	}
 
@@ -822,7 +812,7 @@ Func<
 	// ■ _2 對標（SqlMkr 重寫）：異構字典 UPDATE。
 	// 對照：原 BatOrdUpdByDbDictCore 手拼 `u_{i}_{j}`/`id_{i}` 前綴逐對拼 SET 段（異構語義的必然形狀）；
 	// 新寫法 Update().AddRows 收整批 (Ids, CodeDicts)，異構列集仍逐對自帶（鍵集各異），
-	// 但對序前綴/SET 段/WHERE 段/Upper→Raw 全部由 SqlMkr 內部吸收，業務只剩數據。
+	// 對序前綴/SET 段/WHERE 段/Upper→Raw 全部由 SqlMkr 內部吸收，執行端一句 Run 落庫。
 	private async Task<nil> BatOrdUpdByDbDictCore_2(
 		IDbFnCtx Ctx, IList<(IStr_Any Dict, TId Id)> BatchItems, CT Ct
 	){
@@ -832,12 +822,8 @@ Func<
 			Ids.Add(Id);
 			Dicts.Add(Dict);
 		}
-		var Stmt = T.SqlMkr().Update().AddRows(T.CodeIdName, Ids, Dicts).Build();
-
-		// 每批新建命令:reader 消費完會 Dispose 命令,跨批復用緩存命令在 pg 上會崩
-		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
-		Ctx.AddToDispose(Cmd);
-		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		var EtArg = T.SqlMkr().Update().AddRows(T.CodeIdName, Ids, Dicts).Build();
+		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
 		return NIL;
 	}
 
@@ -957,12 +943,8 @@ Func<
 		if(Ids.Count == 0){
 			return NIL;
 		}
-		var Stmt = T.SqlMkr().Delete().SoftIn(T.CodeIdName, Ids).Build();
-
-		// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
-		var Cmd = await SqlCmdMkr.Prepare(Ctx, Stmt.Sql, Ct);
-		Ctx.AddToDispose(Cmd);
-		await Cmd.RawArgs(Stmt.Args.ToDict()).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		var EtArg = T.SqlMkr().Delete().SoftIn(T.CodeIdName, Ids).Build();
+		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
 		return NIL;
 	}
 

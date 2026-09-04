@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-public partial interface IArgDict{
+public partial interface IArgDict:IDictionary<str,obj>{
 	public IDictionary<str, obj?> ParamName_RawValue{get;set;}
 	[Doc(@$"
 	#Params([],[Raw param name, without prefix(like `@` in sqlite's sql)])

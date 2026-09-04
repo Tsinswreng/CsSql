@@ -23,6 +23,6 @@ public partial class SqlMkrInsert{
 	/// 整批追加：函數只管一批的直譯——把 IList 行原樣收下。
 	public partial SqlMkrInsert AddRows(IList<IStr_Any> Rows);
 
-	/// 拼出 SqlStmt（單語句多組 VALUES、參數自動帶 `__組號` 後綴、值 Upper→Raw）。
-	public partial SqlStmt Build();
+	/// 拼出 ISqlEtArg（單語句多組 VALUES、參數自動帶 `__組號` 後綴、值 Upper→Raw）。
+	public partial ISqlEtArg Build();
 }

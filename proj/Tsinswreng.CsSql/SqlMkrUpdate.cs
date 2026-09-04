@@ -30,6 +30,6 @@ public partial class SqlMkrUpdate{
 	/// 泛型 T 使 IList<IdWord> 等值類型 Id 不需要手動轉 obj?。
 	public partial SqlMkrUpdate AddRows<T>(str IdCodeCol, IList<T> Ids, IList<IStr_Any> CodeCol_UpperVals);
 
-	/// 拼出 SqlStmt（N 條 UPDATE ';' 拼接、參數名自動帶對序、值 Upper→Raw）。
-	public partial SqlStmt Build();
+	/// 拼出 ISqlEtArg（N 條 UPDATE ';' 拼接、參數名自動帶對序、值 Upper→Raw）。
+	public partial ISqlEtArg Build();
 }

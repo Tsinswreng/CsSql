@@ -4,7 +4,7 @@ namespace Tsinswreng.CsSql;
 ///
 /// 設計總則（新批量寫法）：
 /// - 函數邊界 = 批邊界：整個 SqlMkr 生命週期收集的數據就是「一批」，
-///   一口氣 Build 成一個命令可執行的 SQL 文本 + 參數表（詳見 SqlStmt）；
+///   一口氣 Build 成一個命令可執行的 SQL 文本 + 參數表（詳見 ISqlEtArg）；
 ///   分批/切批不在此處，由最源頭的調用方（SqlFlow）負責。
 /// - 構造即綁值：條件和值在鏈式調用時直接傳入（obj? Upper 值），
 ///   不再有 SqlSplicer 的 out IParam / binder / Many 流式綁定心智。

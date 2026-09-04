@@ -6,8 +6,7 @@ namespace Tsinswreng.CsSql;
 ///
 /// 語法順序示意：
 /// Select(cols) → From() → [Where1() | WhereNonDel() | Where(raw)] → 條件鏈 → OrderBy → LimOfst → Build。
-/// 條件鏈：AndEq（常量綁值）/ AndEqEach（同構批量等值：每元素一條語句，位置對齊）/
-///         AndKeys（複合鍵批量：每行一條語句）/ AndIn（單語句 IN）/ And（任意運算符 Raw）...。
+/// 條件鏈：AndEq（常量綁值）/ AndEqEach（批量等值段）/ AndIn（單語句 IN）/ And（任意運算符 Raw）...。
 /// 所有值參數直接傳 Upper 值（構造即綁值），不需要 out IParam / binder。
 public partial class SqlMkrSelect{
 	/// 綁定的表。
@@ -19,7 +18,8 @@ public partial class SqlMkrSelect{
 	/// 共享參數表（raw 值、名字全程唯一）。
 	public IArgDict Args{get;set;} = ArgDict.Mk();
 
-	/// 同構批量份數：AndEqEach/AndKeys 每調用一次加一份。
+	/// 批量段公共長度 N：AndEqEach 每追加一個批量段記錄其元素數，
+	/// Build 時核對所有批量段等長（不等長報錯），模板 × N 展開成 N 條語句 ';' 拼一命令。
 	public u64 TmplCnt{get;set;} = 1;
 
 	// ===================== 表源 =====================
@@ -64,9 +64,10 @@ public partial class SqlMkrSelect{
 
 	// ===================== 條件（批量） =====================
 
-	/// 同構批量等值：每元素一條 `... AND CodeCol = @CodeCol__i` 語句，
-	/// 全部拼進同一命令，TmplCnt 加一份——執行層 AsyE1dWithNull 逐結果集收首行、位置對齊補 null。
-	/// 這是「IN 做不了」的保序/查無補 null 查詢的入口（對標舊 RunDupliSql + Many binder）。
+	/// 批量等值段：在本批的每一條語句中追加 `AND CodeCol = @CodeCol__i`（i = 元素序）。
+	/// 不立即展開：只記錄「一個批量段 + 它的 IList」，Build 時統一按「模板 × N」展開（N = 各批量段公共長度）。
+	/// 多個 AndEqEach 連用即成複合鍵批量（如 Owner 常量 + Head/Lang 各一段），
+	/// 對標舊 SqlSplicer 的 One（常量）/Many（批量段）binder 形狀；查無補位語義見 Get2d。
 	/// 泛型 T 使 IList<IdWord> 等值類型 Id 不需要手動轉 obj?。
 	public partial SqlMkrSelect AndEqEach<T>(str CodeCol, IList<T> Uppers);
 
@@ -98,6 +99,6 @@ public partial class SqlMkrSelect{
 
 	// ===================== 產物 =====================
 
-	/// 拼出最終 SqlStmt（Sql 文本 + Args + TmplCnt）。
-	public partial SqlStmt Build();
+	/// 拼出最終 ISqlEtArg（Sql 文本 + Args）。
+	public partial ISqlEtArg Build();
 }

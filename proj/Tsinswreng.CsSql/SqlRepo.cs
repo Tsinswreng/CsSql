@@ -98,7 +98,7 @@ WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(Wi
 		,bool WithDel
 		,CT Ct
 	){
-		var Sql = T.SqlSplicer().Select("*").From().Where1()
+		var Sql = T.SqlSplicer().Select("*").FromT().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
 		if(!WithDel && T.SoftDelCol is not null){
 			Sql.And(T.SoftDelCol.FnSqlIsNonDel());
@@ -107,20 +107,23 @@ WHERE {T.QtCol(T.CodeIdName)} IN ({str.Join(", ", Params)}){MkNonDelFilterSql(Wi
 		return dicts.Select(x=>x is null ? null : T.DbDictToEntity<TEntity>(x));
 	}
 
-	// ■ _2 對標（SqlMkr 重寫）：同構批量等值查、位置對齊返回。
-	// 對照：原 BatGetByIdCore 用 SqlSplicer + Boolean Many binder + RunDupliSql；
-	// 新寫法 AndEqEach 收整批 IList（函數邊界 = 批邊界，切批交上游 SqlFlow），
-	// Build 產出 N 條等值語句 ';' 拼一命令，泛型 Get1d 逐結果集回讀——外層 IList 對齊入參、空槽 null、
-	// 實體轉換（DbDictToEntity）由執行端內部吞掉（T 若是 ITable<TEntity> 時 TEntity 自動推斷）。
+	// ■ _2 對標（SqlSplicer 重寫）：同構批量等值查、位置對齊返回。
+	// 對照：原 BatGetByIdCore 用 SqlSplicer + Bool + Many binder + RunDupliSql（流式 Ids、逐結果集手動收集）；
+	// 新寫法構造端一樣通用——And().Bool(CodeId, "=", Many(Ids))（操作符是參數，> / < / LIKE 同理，無需專用方法），
+	// 差別在出口：Build 把「Segs + binder」全量展開成 ISqlEtArg（Sql = N 份語句 ';' 拼一命令、Args 對序後綴全程唯一），
+	// 執行端 Get1d<T> 逐結果集回讀、保序補空槽、DbDictToEntity 由執行端內部吞掉——調用方只收一行。
 	private async Task<IList<TEntity?>> BatGetByIdCore_2(
 		IDbFnCtx Ctx, IList<TId> Ids
 		,bool WithDel
 		,CT Ct
 	){
-		var Mk = T.SqlMkr().Select("*").From().Where1()
-			.AndEqEach(T.CodeIdName, Ids);
+		if(Ids.Count == 0){
+			return [];
+		}
+		var Mk = T.SqlSplicer().Select("*").FromT().Where1()
+			.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
 		if(!WithDel && T.SoftDelCol is not null){
-			Mk.AndSqlIsNonDel();
+			Mk.And(T.SoftDelCol.FnSqlIsNonDel());
 		}
 		var Ans = await SqlCmdMkr.Get1d(Ctx, T, Mk.Build(), Ct)
 			.ToListAsync(Ct);
@@ -435,7 +438,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 		}
 
 		// step 1:拼一次 IN 查詢(Many 走同步重載,把整個 List 展成一個 IN 條件)
-		var Sql = T.SqlSplicer().Select("*").From().Where1()
+		var Sql = T.SqlSplicer().Select("*").FromT().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
 		// WithDel=true:含軟刪,故不加非刪過濾。
 
@@ -654,14 +657,19 @@ Func<
 		return NIL;
 	}
 
-	// ■ _2 對標（SqlMkr 重寫）：同構批量 INSERT。
-	// 對照：原 BatOrdAddCore 手拼 InsertManyClause + NumFieldParam 逐格綁參；
-	// 新寫法 Insert 一次聲明列集、AddRows 收整批 CodeDict（函數只管一批），
-	// 列引用/引號/Upper→Raw/參數後綴全部由 SqlMkr 內部完成，執行端一句 Run 落庫。
+	// ■ _2 對標（SqlSplicer 重寫）：同構批量 INSERT。
+	// 對照：原 BatOrdAddCore 用庫工具 InsertManyClause 生成多值組 SQL + NumFieldParam 逐格手綁（參數名帶 __組號）；
+	// 新寫法構造端保持 splicer 本性——Insert 語句頭拼 `INSERT INTO t`、Vals 語句部拼 `(列...) VALUES (@列...)`
+	// 並為每列註冊 Many binder（值序列 = 整批該列值），Build 按公共長度展開 N 份、參數對序後綴全程唯一，執行端一句 Run 落庫。
 	private async Task<nil> BatOrdAddCore_2(IDbFnCtx Ctx, IList<TEntity> BatEnts, CT Ct){
-		var Rows = BatEnts.Select(x=>T.EntityToCodeDict(x)).ToList();
-		var EtArg = T.SqlMkr().Insert(T.Columns.Keys).AddRows(Rows).Build();
-		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
+		var Flds = T.Columns.Keys.ToList();
+		var Rows = BatEnts.Select(e => T.EntityToCodeDict(e)).ToList();
+
+		var Sql = T.SqlSplicer()
+			.InsertIntoT()
+			.Vals(Flds, Rows);
+
+		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
 	}
 
@@ -689,39 +697,23 @@ Func<
 
 		u64 BatchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 
-		str MkSql(u64 Cnt){
-			var Stmts = new List<str>((i32)Cnt);
-			foreach(var i in Enumerable.Range(0, (i32)Cnt)){
-				var Idx = (u64)i;
-				var Clause = str.Join(", ", fieldsToUpdate.Select(x=>$"{T.QtCol(x)} = {T.NumFieldParam(x, Idx)}"));
-				var PId = T.NumFieldParam(T.CodeIdName, Idx);
-				Stmts.Add($"UPDATE {T.Qt(T.DbTblName)} SET {Clause} WHERE {T.QtCol(T.CodeIdName)} = {PId}");
-			}
-			return str.Join(";\n", Stmts);
-		}
+		async Task<nil> BatUpdCore(IList<TEntity> BatchEnts, CT Ct2){
+			var Rows = BatchEnts.Select(e => T.EntityToCodeDict(e)).ToList();
+			var Ids = Rows.Select(r => r.TryGetValue(T.CodeIdName, out var id) ? id : null).ToList();
 
-		async Task<ISqlCmd> GetCmd(u64 Cnt, CT Ct){
-			// 每批新建命令:reader 消費完會 Dispose 命令(AsyE2d 的 DisposableList),跨批復用緩存命令在 pg 上會崩
-			var Cmd = await SqlCmdMkr.Prepare(Ctx, MkSql(Cnt), Ct);
-			Ctx.AddToDispose(Cmd);
-			return Cmd;
+			// 同構批量 UPDATE（形態1）：UpdateT() 拼 `UPDATE t`、Set 語句部拼 `SET a = @a, b = @b`
+			// 並為每列註冊 Many binder（值序列 = 整批該列）、Where1/And/Bool 按主鍵等值定位——SQL 長相就是裸 SQL 形狀
+			var Sql = T.SqlSplicer()
+				.UpdateT()
+				.Set(fieldsToUpdate, Rows)
+				.Where1().And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
+
+			await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct2);
+			return NIL;
 		}
 
 		await using var Batch = new BatchCollector<TEntity, nil>(async(BatchEnts, Ct)=>{
-			var Cnt = (u64)BatchEnts.Count;
-			var Arg = new Dictionary<str, obj?>();
-			for(i32 i = 0; i < BatchEnts.Count; i++){
-				var Ent = BatchEnts[i];
-				var DbDict = T.ToDbDict(T.EntityToCodeDict(Ent));
-				foreach(var Col in fieldsToUpdate){
-					if(DbDict.TryGetValue(Col, out var Val)){
-						Arg[T.NumFieldParam(Col, (u64)i).Name] = Val;
-					}
-				}
-				Arg[T.NumFieldParam(T.CodeIdName, (u64)i).Name] = DbDict[T.CodeIdName];
-			}
-			var Cmd = await GetCmd(Cnt, Ct);
-			await Cmd.RawArgs(Arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+			await BatUpdCore(BatchEnts, Ct);
 			return NIL;
 		}, BatchSize);
 
@@ -809,21 +801,25 @@ Func<
 		return NIL;
 	}
 
-	// ■ _2 對標（SqlMkr 重寫）：異構字典 UPDATE。
-	// 對照：原 BatOrdUpdByDbDictCore 手拼 `u_{i}_{j}`/`id_{i}` 前綴逐對拼 SET 段（異構語義的必然形狀）；
-	// 新寫法 Update().AddRows 收整批 (Ids, CodeDicts)，異構列集仍逐對自帶（鍵集各異），
-	// 對序前綴/SET 段/WHERE 段/Upper→Raw 全部由 SqlMkr 內部吸收，執行端一句 Run 落庫。
+	// ■ _2 對標（SqlSplicer 重寫）：異構字典 UPDATE。
+	// 對照：原 BatOrdUpdByDbDictCore 手拼 `u_{i}_{j}`/`id_{i}` 前綴逐對拼 SET 段（異構語義的必然形狀：
+	//       每對 SET 標集可不同，模板重複不了）；對與對之間 ';' 拼一命令。
+	// 新寫法一句收氣——UpdEach(CodeIdName, Ids, DbDicts) 語句部：庫內逐對拼
+	// `UPDATE t SET 列=@u_{i}_{j}... WHERE CodeId=@id_{i}`、空對跳過、主鍵列不出現在 SET、
+	// One binder 綁值（Db 層直放/主鍵按列 Upper→Raw），SQL 長相就是形態 2，執行端一句 Run 落庫。
 	private async Task<nil> BatOrdUpdByDbDictCore_2(
 		IDbFnCtx Ctx, IList<(IStr_Any Dict, TId Id)> BatchItems, CT Ct
 	){
-		var Ids = new List<obj?>(BatchItems.Count);
-		var Dicts = new List<IStr_Any>(BatchItems.Count);
-		foreach(var (Dict, Id) in BatchItems){
-			Ids.Add(Id);
-			Dicts.Add(Dict);
+		var Ids = BatchItems.Select(x => (obj?)x.Id).ToList();
+		var DbDicts = BatchItems.Select(x => x.Dict).ToList();
+		var Sql = T.SqlSplicer().UpdEach(T.CodeIdName, Ids, DbDicts);
+
+		// 全部為空對(沒有可更新的列):空操作返回(不發 SQL)
+		if(Sql.Segs.Count == 0){
+			return NIL;
 		}
-		var EtArg = T.SqlMkr().Update().AddRows(T.CodeIdName, Ids, Dicts).Build();
-		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
+
+		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
 	}
 
@@ -932,19 +928,28 @@ Func<
 		return new SoftDelInId();
 	}
 
-	// ■ _2 對標（SqlMkr 重寫）：軟刪 IN。
+	// ■ _2 對標（SqlSplicer 重寫）：軟刪 IN。
 	// 對照：原 SoftDelInId 手拼 `UPDATE ... SET {SoftDelCol} = @__SoftDelVal WHERE Id IN (...)`，
 	//       批大小(sqlite 50/pg 500)由庫層寫死在此方法內；
-	// 新寫法 Delete().SoftIn 一語收口：軟刪值取 SoftDelCol.FnDelete(null) 在 SqlMkr 內部完成，
-	//       函數只管一批 IList（函數邊界 = 批邊界），批大小改由最源頭調用方（SqlFlow）決定，此處不再有 BatchCollector。
+	// 新寫法語詞對應裸 SQL——UpdateT() 拼 `UPDATE t`、Set(軟刪列, raw值) 拼 `SET DelCol = @DelCol`
+	// （軟刪值 = SoftDelCol.FnDelete(null) 已是 Db 層 raw）、WhereIn(CodeId, Ids) 拼 `WHERE Id IN (@_0,...)`
+	// （每 Id 按列 Upper→Raw 綁 One），函數只管一批 IList（函數邊界 = 批邊界），批大小改由最源頭調用方（SqlFlow）決定。
 	public async Task<nil> SoftDelInId_2(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count == 0){
 			return NIL;
 		}
-		var EtArg = T.SqlMkr().Delete().SoftIn(T.CodeIdName, Ids).Build();
-		await SqlCmdMkr.Run(Ctx, EtArg, Ct);
+		if(T.SoftDelCol is null){
+			throw new Exception("SoftDeleteCol is null");
+		}
+
+		var Sql = T.SqlSplicer()
+			.UpdateT()
+			.Set(T.SoftDelCol.CodeColName, T.SoftDelCol.FnDelete(null))
+			.WhereIn(T.CodeIdName, Ids.Select(x => (obj?)x).ToList());
+
+		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
 	}
 
@@ -1348,7 +1353,7 @@ Func<
 		,bool WithDel
 		,CT Ct
 	){
-		var Sql = T.SqlSplicer().Select("*").From().Where1()
+		var Sql = T.SqlSplicer().Select("*").FromT().Where1()
 		.And().Bool(T.CodeIdName, "=", x=>x.Many(Ids));
 		if(!WithDel && T.SoftDelCol is not null){
 			Sql.And(T.SoftDelCol.FnSqlIsNonDel());

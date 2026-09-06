@@ -109,17 +109,6 @@ public static class ExtnITable {
 
 
 		[Doc($@"
-		#Sum[Create batch-oriented SQL maker (new splicing entry)]
-		#Rtn[SqlMkr with table context set]
-		")]
-		public SqlMkr SqlMkr() {
-			var R = new SqlMkr();
-			R.Tbl = z;
-			return R;
-		}
-
-
-		[Doc($@"
 		#Sum[Map code column name to quoted database column name]
 		#Params([IParam whose Name is the code column name])
 		#Rtn[Quoted database column name]

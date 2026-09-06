@@ -71,6 +71,8 @@ internal sealed class SharedManyAsyMapBatchSource<TItem>{
 internal sealed class ParamAutoBinderManyAsyMap<TItem, TVal>: IParamAutoBinderMultiAsy{
 	public IParam Param { get; set; }
 	public ITable? Tbl { get; set; }
+	/// 值所屬的 Code 列名:非空時按列 Upper→Raw(精確列轉換);空時退回按類型默認映射(單參重載)。
+	public str? CodeCol { get; set; }
 	public Func<TItem, TVal> FnMap { get; set; }
 	private SharedManyAsyMapBatchSource<TItem> SharedSource { get; set; }
 	private i32 BinderIndex { get; set; }
@@ -106,12 +108,19 @@ internal sealed class ParamAutoBinderManyAsyMap<TItem, TVal>: IParamAutoBinderMu
 
 		foreach(var (i, value) in mapped.Index()){
 			var p = Param.ToOfst((u64)i);
-			if(Tbl is not null){
-				Args.AddRaw(p, Tbl.UpperToRaw(value));
-			}else{
-				Args.AddRaw(p, value);
-			}
+			Args.AddRaw(p, ToRaw(value));
 		}
+	}
+
+	/// 值 → 原始層:帶 Tbl 時執行 Upper→Raw;有 CodeCol 按列精確轉換,否則按類型默認映射。
+	private obj? ToRaw(TVal Value){
+		if(Tbl is null){
+			return Value;
+		}
+		if(CodeCol != null){
+			return Tbl.UpperToRaw(Value, CodeCol);
+		}
+		return Tbl.UpperToRaw(Value);
 	}
 }
 

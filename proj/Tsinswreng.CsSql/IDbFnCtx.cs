@@ -3,9 +3,12 @@ using System.Data;
 namespace Tsinswreng.CsSql;
 using Tsinswreng.CsCtx;
 
+[Doc(@$"Database Function Context。
+可 Dispose 能力繼承自 {nameof(IFnCtx)};釋放邏輯由 {nameof(DbFnCtx)} override Dispose 鏈實現:
+先跑基類鉤子({nameof(FnCtx.FnDisposeAsy)}),再關自己的 Db 資源（ObjsToDispose → Txn → DbConn）。
+")]
 public partial interface IDbFnCtx
 	:IFnCtx
-	,IAsyncDisposable
 {
 	[Doc(@$"Transaction")]
 	public ITxn? Txn{get;set;}
@@ -30,33 +33,4 @@ public partial interface IDbFnCtx
 #if Impl
 	= 1;
 #endif
-	async ValueTask IAsyncDisposable.DisposeAsync(){
-		if(ObjsToDispose != null){
-			foreach(var obj in ObjsToDispose){
-				if(obj is IAsyncDisposable DispAsy){
-					await DispAsy.DisposeAsync();
-				}else if(obj is IDisposable Disp){
-					Disp.Dispose();
-				}
-			}
-			ObjsToDispose.Clear();
-		}
-
-		if(Txn is IDisposable txn){
-			txn.Dispose();
-			Txn = null;
-		}
-
-		if(DbConn is IDbConnection dbConn){
-			try{
-				dbConn.Close();
-			}catch{
-				if(dbConn is IDisposable disp){
-					disp.Dispose();
-				}
-			}
-			DbConn = null;
-		}
-	}
 }
-

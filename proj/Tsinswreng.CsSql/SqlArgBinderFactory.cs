@@ -26,7 +26,7 @@ public class SqlArgBinderFactory{
 #Rtn[Auto binder instance]
 ")]
 	public IParamAutoBinder One<TVal>(TVal Value){
-		return new ParamAutoBinderOne<TVal>(Param, Value){Tbl=Tbl};
+		return new ParamAutoBinderOne<TVal>(Param, Value){Tbl=Tbl, CodeCol=CodeCol};
 	}
 	[Doc(@$"
 #Sum[Create binder for a value sequence]
@@ -35,8 +35,8 @@ public class SqlArgBinderFactory{
 #Rtn[Auto binder instance]
 ")]
 	public IParamAutoBinder Many<TVal>(IEnumerable<TVal> Values){
-		// 同步版本委托给异步版本，通过 ToAsyncEnumerable 转换
-		return Many(Values.ToAsyncEnumerable());
+		// 同步值序列直接用同步 binder：供 Build() 一次性全量展开（异步流式才走 Many(IAsyncEnumerable)）
+		return new ParamAutoBinderManyValues<TVal>(Param, Values){Tbl=Tbl, CodeCol=CodeCol};
 	}
 	
 	[Doc(@$"
@@ -46,7 +46,7 @@ public class SqlArgBinderFactory{
 #Rtn[Auto binder instance]
 ")]
 	public IParamAutoBinder Many<TVal>(IAsyncEnumerable<TVal> Values){
-		return new ParamAutoBinderManyAsy<TVal>(Param, Values){Tbl=Tbl};
+		return new ParamAutoBinderManyAsy<TVal>(Param, Values){Tbl=Tbl, CodeCol=CodeCol};
 	}
 
 	[Doc(@$"
@@ -78,7 +78,7 @@ public class SqlArgBinderFactory{
 			group,
 			idx,
 			FnMap
-		){Tbl = Tbl};
+		){Tbl = Tbl, CodeCol = CodeCol};
 	}
 
 	[Doc(@$"

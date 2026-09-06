@@ -357,12 +357,12 @@ public static class ExtnISqlCmdMkr{
 		// Get2d（結果集×行、索引對齊——一個 Select 可能返回多行的一般形態）。
 		// 每組都有泛型版（吃 ITable<T>，T 從表推斷，內部 DbDictToEntity 轉實體）。
 		// 與舊 RunDupliSql 的區別：不切批（批已由上游切好，EtArg 一整批一命令）、
-		// 不靠 binder（參數已在 SqlMkr 構造端綁好），執行端只剩「準備→綁參→讀取」的薄組合。
+		// 不靠 binder（參數已在 SqlSplicer.Build() 構造端綁好），執行端只剩「準備→綁參→讀取」的薄組合。
 		// ================================================================
 
 		[Doc(@$"
-		#Sum[Execute non-query (INSERT/UPDATE/DELETE) built by {nameof(SqlMkr)}]
-		#Params([Db function context],[Built SQL + Args from SqlMkr],[Cancellation token])
+		#Sum[Execute non-query (INSERT/UPDATE/DELETE) built by {nameof(ISqlEtArg)}]
+		#Params([Db function context],[Built SQL + Args from SqlSplicer.Build()],[Cancellation token])
 		#Rtn[nil after the whole statement batch is executed]
 		#See([{nameof(ISqlEtArg)}])
 		")]
@@ -378,7 +378,7 @@ public static class ExtnISqlCmdMkr{
 
 		[Doc(@$"
 		#Sum[Execute query keeping one slot per result-set, null for empty]
-		#Params([Db function context],[Built SQL + Args from SqlMkr],[Cancellation token])
+		#Params([Db function context],[Built SQL + Args from SqlSplicer.Build()],[Cancellation token])
 		#Rtn[Row per result-set (first row), null placeholder for empty result-set]
 		#Note[Convenient form for exact-match batch (each select returns at most one row); use Get2d when a select may return multiple rows]
 		#See([{nameof(ISqlEtArg)}])
@@ -398,7 +398,7 @@ public static class ExtnISqlCmdMkr{
 
 		[Doc(@$"
 		#Sum[Execute query keeping one lazy slot per result-set, index-aligned to the input batch]
-		#Params([Db function context],[Built SQL + Args from SqlMkr],[Cancellation token])
+		#Params([Db function context],[Built SQL + Args from SqlSplicer.Build()],[Cancellation token])
 		#Rtn[Outer IList (count = result-set count, each slot corresponds to one input element); inner lazy row stream per result-set; empty result-set = empty inner stream]
 		#Note[Consume inner streams in index order: execution shares one reader and advances sequentially from result-set to result-set]
 		#See([{nameof(ISqlEtArg)}])
@@ -418,7 +418,7 @@ public static class ExtnISqlCmdMkr{
 
 		[Doc(@$"
 		#Sum[Execute exact-match query and materialize entities per result-set (null for empty)]
-		#Params([Db function context],[Entity table (its T infers the element type)],[Built SQL + Args from SqlMkr],[Cancellation token])
+		#Params([Db function context],[Entity table (its T infers the element type)],[Built SQL + Args from SqlSplicer.Build()],[Cancellation token])
 		#TParams([Entity type, inferred from Tbl])
 		#Rtn[One entity per result-set, null placeholder for empty result-set]
 		#Note[Convenient form for exact-match batch (each select returns at most one row)]
@@ -443,7 +443,7 @@ public static class ExtnISqlCmdMkr{
 
 		[Doc(@$"
 		#Sum[Execute query and materialize entities per result-set row]
-		#Params([Db function context],[Entity table (its T infers the element type)],[Built SQL + Args from SqlMkr],[Cancellation token])
+		#Params([Db function context],[Entity table (its T infers the element type)],[Built SQL + Args from SqlSplicer.Build()],[Cancellation token])
 		#TParams([Entity type, inferred from Tbl])
 		#Rtn[Outer IList (count = result-set count, each slot corresponds to one input element); inner lazy entity stream per result-set; empty result-set = empty inner stream]
 		#Note[Consume inner streams in index order: execution shares one reader and advances sequentially from result-set to result-set]
@@ -456,7 +456,7 @@ public static class ExtnISqlCmdMkr{
 			var R2d = await z.Get2d(Ctx, EtArg, Ct);
 			var Ans = new List<IAsyncEnumerable<T>>(R2d.Count);
 			foreach(var Inner in R2d){
-				Ans.Add(MapRows(Inner, Tbl, Ct));
+				Ans.Add(z.MapRows(Inner, Tbl, Ct));
 			}
 			return Ans;
 		}

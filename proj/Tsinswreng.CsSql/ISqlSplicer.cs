@@ -1,8 +1,10 @@
+namespace Tsinswreng.CsSql;
+
 using System.Linq.Expressions;
 using System.Collections;
 using Tsinswreng.CsTools;
 using Tsinswreng.CsPage;
-namespace Tsinswreng.CsSql;
+using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 
 [Doc(@$"when you call the splicer apis,
 you must keep the order the same as the sql syntax.
@@ -94,15 +96,13 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return AddSeg(seg);
 	}
 
-	public ISqlSplicer<E> From(){
+	public ISqlSplicer<E> FromT(){
 		AddSeg($"FROM {Qt(Tbl.DbTblName)}");
 		return this;
 	}
 
-	public ISqlSplicer<E> From(str Raw){
-		AddSeg($"FROM {Raw}");
-		return this;
-	}
+	// 注:填其他表名的帶參版(From(str Raw))暫不提供,等真實跨表/schema/別名場景出現再給;
+	// 過渡期用 Raw($"FROM {x}") 兜底。
 
 	public ISqlSplicer<E> Where1(){
 		return AddSeg($"WHERE 1=1");
@@ -195,7 +195,98 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 	}
 
 	#endregion BindedParam
-	
+
+	// ================================================================
+	// 通用拼接出口（2026-09-03）：
+	// splicer 的一切都往 Segs 拼可見 SQL 片段（Select/FromT/Where1/And/Bool/Raw/UpdateT/Eq/PL/PR/C...），
+	// 順序即語法；批量值是 binder（One/Many）的職責。這裡只補兩個不綁語義的通用件：
+	// AddRaw(IParam) 把參數佔位放進片段（Upper→Raw 由 binder 做），Build 把「Segs 模板 + ParamAutoBinders」
+	// 按 Many binder 公共長度展開成執行端吃的 ISqlEtArg（Sql = N 份語句 ';' 拼、Args 對序後綴全程唯一）。
+	// ================================================================
+
+	/// 把 IParam 參數佔位按序拼進片段（SET 值位 / IN 列表 / VALUES 值位...）。Upper→Raw 由對應 binder 完成。
+	public ISqlSplicer<E> AddRaw(IParam P){
+		return AddSeg(P);
+	}
+
+	/// 語句頭片段:INSERT INTO {Tbl 表名}(T 表示自動填表名,與 UpdateT/DelFromT/FromT 同規則)。
+	public ISqlSplicer<E> InsertIntoT(){
+		return AddSeg($"INSERT INTO {Qt(Tbl.DbTblName)}");
+	}
+
+	/// 語句頭片段:DELETE FROM {Tbl 表名}(T 表示自動填表名;跨表/別名等填其他表名場景用到再給帶參版)。
+	public ISqlSplicer<E> DelFromT(){
+		return AddSeg($"DELETE FROM {Qt(Tbl.DbTblName)}");
+	}
+
+	// ================================================================
+	// 語句部 Decl（與 SELECT 系同族的語塊）：
+	// 每個方法 = 一段可見 SQL 片段，按語法順序拼；值收整批（列枚舉/循環/binder 全在庫內），
+	// 批量 = Build 按各 Many binder 公共長度展開 N 份、參數對序後綴。
+	// 同構（Vals/Set）收 CodeDicts（code 層，binder 帶 Tbl 自動 Upper→Raw）；
+	// 異構（UpdEach）收 DbDicts（已 raw，binder 不帶 Tbl 避免二次轉換）。
+	// ================================================================
+
+	[Doc(@$"
+	#Sum[INSERT 值部片段（同構批量）]
+	#Params([Code 列名集合],[整批 CodeDicts（鍵=Code 列名、值=Code 層）])
+	#Rtn[this]
+	#Note[拼出 `(a, b) VALUES (@a, @b)` 並為每列註冊 Many binder（值序列=整批該列）；Build 按行數展開 N 份]
+	")]
+	public partial ISqlSplicer<E> Vals(
+		IList<str> CodeCols
+		,IList<IStr_Any> CodeDicts
+	);
+
+	[Doc(@$"
+	#Sum[UPDATE SET 子句片段（同構批量）]
+	#Params([Code 列名集合（SET 列，通常排除主鍵）],[整批 CodeDicts（鍵=Code 列名、值=Code 層）])
+	#Rtn[this]
+	#Note[拼出 `SET a = @a, b = @b`（含 SET 詞頭）並為每列註冊 Many binder（值序列=整批該列）；配合 UpdateT()/Where1()/And().Bool(...) 使用]
+	")]
+	public partial ISqlSplicer<E> Set(
+		IList<str> CodeCols
+		,IList<IStr_Any> CodeDicts
+	);
+
+	[Doc(@$"
+	#Sum[UPDATE SET 單列單值（語句部）]
+	#Params([Code 列名],[Db 層 raw 值（不帶 Tbl、不再 Upper→Raw；如軟刪值 = SoftDelCol.FnDelete(null) 的結果）])
+	#Rtn[this]
+	#Note[拼出 `SET {{col}} = @{{col}}` 並註冊 One binder（值視為已 raw）；配合 UpdateT()/WhereIn(...) 使用]
+	")]
+	public partial ISqlSplicer<E> Set(
+		str CodeCol
+		,obj? RawVal
+	);
+
+	[Doc(@$"
+	#Sum[異構字典 UPDATE（每對 SET 列集可不同）]
+	#Params([主鍵 Code 列名],[主鍵值列表（code 層，庫內 Upper→Raw）],[整批 DbDicts（鍵=Db 列名、值=已 raw）])
+	#Rtn[this]
+	#Note[逐對生成 `UPDATE t SET 列=@u_{{i}}_{{j}}... WHERE CodeId=@id_{{i}}`，對間 ';' 拼一命令（原 BatOrdUpdByDbDictCore 形態）；空對跳過、主鍵列永不出現在 SET]
+	")]
+	public partial ISqlSplicer<E> UpdEach(
+		str CodeIdName
+		,IList<obj?> Ids
+		,IList<IStr_Any> DbDicts
+	);
+
+	[Doc(@$"
+	#Sum[WHERE 列 IN 值列表（語句部）]
+	#Params([Code 列名],[值列表（code 層，庫內 Upper→Raw）])
+	#Rtn[this]
+	#Note[拼出 `WHERE {{col}} IN (@_0,@_1...)` 並為每個值註冊 One binder（帶 Tbl+CodeCol 轉換）；語詞對應裸 SQL——軟刪=UpdateT().Set(軟刪列,raw).WhereIn(...)、硬刪=DelFromT().WhereIn(...)]
+	")]
+	public partial ISqlSplicer<E> WhereIn(
+		str CodeCol
+		,IList<obj?> UpperVals
+	);
+
+	/// 產出執行端入參：Sql = 模板按各 Many binder 公共長度展開 N 份 ';' 拼（無 Many 則 1 份），
+	/// Args = One 綁無後綴名一次 + Many 綁 @name__0..@name__N-1（對序後綴）。
+	public partial ISqlEtArg Build();
+
 	public ISqlSplicer<E> OrderBy(str Raw){
 		AddSeg($"ORDER BY {Raw}");
 		return this;
@@ -244,9 +335,9 @@ public partial class ISqlSplicer<E>: IAutoBindSqlDuplicator{
 		return Eq(QtTblWithMemb(ExprMemb), Right);
 	}
 
-	///UPDATE {Qt(Tbl.DbTblName)} SET
-	public ISqlSplicer<E> UpdateSet(){
-		return AddSeg($"UPDATE {Qt(Tbl.DbTblName)} SET");
+	///UPDATE {Qt(Tbl.DbTblName)}(T 表示自動填表名;SET 詞歸 Set 語部:UpdateT().Set(...))
+	public ISqlSplicer<E> UpdateT(){
+		return AddSeg($"UPDATE {Qt(Tbl.DbTblName)}");
 	}
 
 	public ISqlSplicer<E> With(str Raw){

@@ -268,6 +268,137 @@ public partial interface IRepo<TEntity, TId>{
 	
 	#endregion Agg
 
+	// -------- 批一級形狀(IList 版):與上方同名 IAsyncEnumerable 版一一對應、語義一致--------
+	// 設計:函數邊界 = 批邊界——吃 IList 的函數內部零業務分批,傳多少元素就執行多少
+	// (同構批量拼 N 組 SQL / IN 同理),一批的規模上限由執行層(庫原語的默認策略)負責兜底;
+	// 流衹出現在調用方來源側,由批原語(SqlFlow.Batches / BatchesInOnly)在調用點切流後逐批調入本段方法。
+
+	#region 樣板:寫·最簡(同構批量 INSERT)
+
+	/// IList 版 OrdAdd:把 List 內的全部實體一次性拼進同構批量 INSERT 並執行完畢。
+	/// 語義承諾:
+	/// - 函數返回 = 本批全部生效(約束/衝突等異常直接向上拋,不留半批返回的狀態);
+	/// - 空列表是合法的無操作(不發 SQL、直接返回成功)。
+	[Doc(@$"IList 版:`{nameof(OrdAdd)}` 的批一級形狀。本批全部執行完畢才返回(衝突/約束違反即拋)。")]
+	public Task<IRespBatInsert> OrdAdd(
+		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
+	);
+
+	#endregion
+
+	#region 樣板:查·最簡(IN + 位置對齊)
+
+	/// IList 版 OrdGetByIdWithDel:按入參 Id 列表做一次 IN 查詢,含軟刪行。
+	/// 語義承諾(與流式版一致):
+	/// - 出參 List 與入參 Ids 一一對應(位置對齊):重複的 Id 返回重複的實體;
+	/// - 查無的 Id 對應位置補 null;
+	/// - 空列表返回空列表(不發 SQL)。
+	[Doc(@$"IList 版:`{nameof(OrdGetByIdWithDel)}` 的批一級形狀、含軟刪。
+	與入參位置一一對應、查無補 null。")]
+	public Task<IList<TEntity?>> OrdGetByIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	);
+
+	#endregion
+
+	#region 樣板:雙參數流(UPDATE by Db Dict,Ids / Dicts 成對)
+
+	/// IList 版 OrdUpdByDbDict:Ids 與 Dicts 成對做 UPDATE(每對一條,拼進同一次命令執行完畢)。
+	/// 語義承諾:
+	/// - Ids 與 Dicts 長度必須相等,否則拋 ArgumentException(不執行任何 UPDATE);
+	/// - 【支持異構字典】每對 Dict 的鍵集可以互不相同——各行只更新自己字典裏出現的列,
+	///   缺的列保持原樣。正因如此,本方法的 SQL 無法模板化重複(AutoBatch/FnSqlDuplicator
+	///   只適用於「各份 SET 列集一致」的同構批量),實現必須逐對手拼,這是異構語義的必然形狀;
+	/// - Dict 以「Db 列名 → 原值」形式給入(列名帶 Db 風格或代碼風格都可,UPPER 轉換由實現處理);
+	/// - 空的 Dict(沒有可更新的列)那一對被跳過,不影響其它對。
+	[Doc(@$"IList 版:`{nameof(OrdUpdByDbDict)}` 的批一級形狀。Ids 與 Dicts 個數須相等。
+	支持異構字典(各行更新的列集可不同)。")]
+	public Task<IRespBatUpd> OrdUpdByDbDict(
+		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
+	);
+
+	#endregion
+
+	#region 樣板:Agg 讀(根 + include 資產,位置對齊)
+
+	/// IList 版 OrdGetAggByIdWithDel:按入參 Id 列表一次裝配聚合(根實體 + 全部 include 資產),含軟刪。
+	/// 語義承諾(與流式版一致):
+	/// - 出參 List 與入參 Ids 一一對應(位置對齊),查無的 Id 對應位置補 null;
+	/// - 每個 Id 只返回一個聚合實例;OneToOne include 若查出重複行會拋異常(數據不一致)。
+	[Doc(@$"IList 版:`{nameof(OrdGetAggByIdWithDel)}` 的批一級形狀,含軟刪。位置一一對應、查無補 null。")]
+	public Task<IList<TAgg?>> OrdGetAggByIdWithDel<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	)where TAgg: class;
+
+	#endregion
+
+	#region 同構批量 UPDATE(整行覆蓋,含主鍵以外的全部列)
+
+	/// IList 版 OrdUpd:把 List 內全部實體一次性拼進同構批量 UPDATE(按主鍵定位、覆蓋主鍵以外全部列)。
+	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作(不發 SQL)。
+	[Doc(@$"IList 版:`{nameof(OrdUpd)}` 的批一級形狀。本批全部執行完畢才返回(衝突/約束違反即拋)。")]
+	public Task<IRespBatUpd> OrdUpd(
+		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
+	);
+
+	#endregion
+
+	#region Upsert(查存在分插入/更新兩堆)
+
+	/// IList 版 OrdUpsert:一次同構批量完 upsert(逐元素查存在、含軟刪行,分插入/更新兩堆後各走同構批量寫)。
+	/// 語義承諾(與流式版一致):以主鍵是否已存在為準(含軟刪行算存在);本批全部執行完畢才返回。
+	[Doc(@$"IList 版:`{nameof(OrdUpsert)}` 的批一級形狀。存在判定含軟刪行,本批全部執行完畢才返回。")]
+	public Task<IRespBatUpsert> OrdUpsert(
+		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
+	);
+
+	#endregion
+
+	#region UPDATE by Code Dict(Ids / 字典成對)
+
+	/// IList 版 OrdUpdByCodeDict:Ids 與 CodeDicts(代碼風格字典)成對做 UPDATE。
+	/// 內部把 CodeDict 轉換成 DbDict 後、複用 {nameof(OrdUpdByDbDict)} 的異構批量語義(同行只更新自己字典裏出現的列)。
+	/// 語義承諾(與流式版一致):Ids 與 Dicts 長度必須相等,否則拋 ArgumentException(不執行任何 UPDATE)。
+	[Doc(@$"IList 版:`{nameof(OrdUpdByCodeDict)}` 的批一級形狀。Ids 與 Dicts 個數須相等、支持異構字典。")]
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
+		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> CodeDicts, CT Ct
+	);
+
+	#endregion
+
+	#region 軟刪(單表,IN 語義)
+
+	/// IList 版 SoftDelInId:按入參 Id 列表一次軟刪(單表 UPDATE 軟刪列)。IN 語義:無序、忽略不存在的 Id、可重複。
+	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
+	[Doc(@$"IList 版:`{nameof(SoftDelInId)}` 的批一級形狀。IN 語義(無序/忽略不存在/可重複),本批一次執行完畢。")]
+	public Task<ISoftDelInId> SoftDelInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	);
+
+	#endregion
+
+	#region 寫向 Agg:聚合級聯插入
+
+	/// IList 版 OrdAddAgg:把 List 內全部聚合一次級聯插入(根 + 全部 include 資產,各自同構批量)。
+	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
+	[Doc(@$"IList 版:`{nameof(OrdAddAgg)}` 的批一級形狀。根與 include 資產各一批同構插入、本批全部執行完畢才返回。")]
+	public Task<IRespBatAddAgg> OrdAddAgg<TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct
+	);
+
+	#endregion
+
+	#region 寫向 Agg:聚合軟刪(根 + 全部 include 資產聯動,IN 語義)
+
+	/// IList 版 SoftDelAggInId:按入參 Id 列表一次軟刪聚合(根 + 全部 include 資產各自 UPDATE 軟刪列)。IN 語義。
+	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
+	[Doc(@$"IList 版:`{nameof(SoftDelAggInId)}` 的批一級形狀。根與 include 資產聯動軟刪、本批一次執行完畢。")]
+	public Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	);
+
+	#endregion
+
 }
 
 

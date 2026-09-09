@@ -63,16 +63,26 @@ public class ParamAutoBinderManyValues<TVal>: IParamAutoBinderMulti{
 #Throw[{nameof(InvalidCastException)}][When batch element type does not match {nameof(TVal)}]
 ")]
 	public void BindBatch(IArgDict Args, IList Batch){
-		var list = new List<TVal>(Batch.Count);
+		var list = new List<TVal?>(Batch.Count);
 		foreach(var item in Batch){
+			if(item is null){
+				// Many 值序列與 Bind / TryTakeBatchArgs 同語義:列值容 null(可空列、缺省列)。
+				// null 對 TVal 是否合法由「該批是否能以 null 標識」決定:引用型 / 可空值型一律放行,
+				// 僅非空值型(TVal=struct 且不可空)為上游拼 SQL 錯誤,保留抛錯兜底。
+				if(!typeof(TVal).IsValueType || Nullable.GetUnderlyingType(typeof(TVal)) is not null){
+					list.Add(default);
+					continue;
+				}
+				throw new InvalidCastException($"Expected batch item type {typeof(TVal).Name}, got null.");
+			}
 			if(item is not TVal typed){
-				throw new InvalidCastException($"Expected batch item type {typeof(TVal).Name}, got {item?.GetType().Name ?? "null"}.");
+				throw new InvalidCastException($"Expected batch item type {typeof(TVal).Name}, got {item.GetType().Name}.");
 			}
 			list.Add(typed);
 		}
 		foreach(var (i, value) in list.Index()){
 			var p = Param.ToOfst((u64)i);
-			Args.AddRaw(p, ToRaw(value));
+			Args.AddRaw(p, value is null ? null : ToRaw(value));
 		}
 	}
 

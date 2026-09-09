@@ -1,4 +1,4 @@
-﻿namespace Tsinswreng.CsSql;
+namespace Tsinswreng.CsSql;
 
 using System.Data;
 using System.Runtime.CompilerServices;
@@ -626,6 +626,16 @@ Func<
 		return new RespUpd();
 	}
 
+	// ■ IList 版 OrdUpd:函數只管一批——整批一次同構 UPDATE(批大小/切批是調用方/原語的職責)。
+	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
+		if(fieldsToUpdate.Count == 0 || Ents.Count == 0){
+			return new RespUpd();
+		}
+		await BatUpdCore(Ctx, Ents, fieldsToUpdate, Ct);
+		return new RespUpd();
+	}
+
 	// ■ 批內核心(一批 Update by Db Dict):吃 IList,SQL 走 SqlSplicer 語句部——
 	// UpdEach(CodeIdName, Ids, DbDicts) 庫內逐對拼 `UPDATE t SET 列=@u_{i}_{j}... WHERE CodeId=@id_{i}`
 	// (對間 ';' 拼一命令):支持異構字典(每對 Dict 鍵集可不同)、空對跳過、主鍵列不出現在 SET、
@@ -711,6 +721,17 @@ Func<
 		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
 	}
 
+	// ■ IList 版 OrdUpdByCodeDict:Ids 與 CodeDicts 成對、整批一次異構 UPDATE(複用 IList 版 OrdUpdByDbDict)。
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
+		IDbFnCtx Ctx
+		,IList<TId> Ids
+		,IList<IStr_Any> CodeDicts
+		,CT Ct
+	){
+		var DbDicts = CodeDicts.Select(x=>T.ToDbDict(x)).ToList();
+		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
+	}
+
 	// ■ 軟刪 IN 批核心(吃 IList 一批):SQL 走 SqlSplicer 語句部——
 	// UpdateT() 拼 `UPDATE t`、Set(軟刪列, raw值) 拼 `SET DelCol = @DelCol`(軟刪值 = SoftDelCol.FnDelete(null)
 	// 已是 Db 層 raw)、WhereIn(CodeId, Ids) 拼 `WHERE Id IN (@_0,...)`(每 Id 按列 Upper→Raw 綁 One)。
@@ -739,6 +760,16 @@ Func<
 			throw new Exception("SoftDeleteCol is null");
 		}
 		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return new SoftDelInId();
+	}
+
+	// ■ IList 版 SoftDelInId:函數只管一批——整批一次 IN 軟刪(批大小/切批是調用方/原語的職責)。
+	public async Task<ISoftDelInId> SoftDelInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatSoftDelInCore(Ctx, Ids, Ct);
+		}
 		return new SoftDelInId();
 	}
 
@@ -777,6 +808,27 @@ Func<
 	}
 
 	public async Task<IRespBatAddAgg> OrdAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+		await SqlFlow.BatchesInOnly(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct, batchSize);
+		return new RespBatAddAgg();
+	}
+
+	// ■ IList 版 OrdAddAgg:函數只管一批——整批聚合級聯插入一次完成。
+	public async Task<IRespBatAddAgg> OrdAddAgg<TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
+		if(Aggs.Count > 0){
+			await BatOrdAddAggCore<TAgg>(Ctx, Aggs, Ct);
+		}
+		return new RespBatAddAgg();
+	}
+
+	// ■ 聚合級聯插入批核心(吃 IList 一批):校驗聚合註冊與訪問器後、根與每個 include 資產各拼一次同構批量 INSERT。
+	// 「一批」的粒度:進來的 List 有多長就拼多長、一次寫完;批大小/切批是調用方(原語)的職責。
+	private async Task<nil> BatOrdAddAggCore<TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> BatchAgg, CT Ct
+	){
+		if(BatchAgg.Count == 0){
+			return NIL;
+		}
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
 			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
@@ -796,7 +848,6 @@ Func<
 			includeTypeInclude[include.EntityType] = include;
 		}
 
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var rootCols = T.Columns.Keys.ToList();
 		var includeColsByType = new Dictionary<Type, IList<str>>();
 
@@ -870,91 +921,82 @@ Func<
 			return NIL;
 		}
 
-		await using var batch = new BatchCollector<TAgg, nil>(async(batchAgg, Ct)=>{
-			var roots = new List<TEntity>(batchAgg.Count);
-			var includeRows = new Dictionary<Type, IList<obj>>();
-			foreach(var include in aggReg.Includes){
-				includeRows[include.EntityType] = new List<obj>();
-			}
-
-			foreach(var agg in batchAgg){
-				if(agg is null){
-					throw new Exception($"Aggregate item is null. Agg={typeof(TAgg)}");
-				}
-				var aggObj = (obj)agg;
-
-				TEntity? rootEnt = null;
-				var oneToOneSeen = new HashSet<Type>();
-				foreach(var key in aggAccessor.GetGetterNames(aggObj)){
-					if(!aggAccessor.TryGet(aggObj, key, out var val) || val is null){
-						continue;
-					}
-
-					if(rootEnt is null && aggReg.RootEntityType.IsAssignableFrom(val.GetType())){
-						if(val is not TEntity castRoot){
-							throw new Exception($"Aggregate root value type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, ValueType={val.GetType()}");
-						}
-						rootEnt = castRoot;
-						continue;
-					}
-
-					if(val is IEnumerable enumerable && val is not string){
-						foreach(var item in enumerable){
-							if(item is null){
-								continue;
-							}
-							var itemType = item.GetType();
-							var include = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(itemType));
-							if(include is null){
-								continue;
-							}
-							if(include.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(include.EntityType)){
-								throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={include.EntityType}");
-							}
-							includeRows[include.EntityType].Add(item);
-							oneToOneSeen.Add(include.EntityType);
-						}
-						continue;
-					}
-
-					var valType = val.GetType();
-					var includeOne = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(valType));
-					if(includeOne is null){
-						continue;
-					}
-					if(includeOne.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(includeOne.EntityType)){
-						throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={includeOne.EntityType}");
-					}
-					includeRows[includeOne.EntityType].Add(val);
-					oneToOneSeen.Add(includeOne.EntityType);
-				}
-
-				if(rootEnt is null){
-					throw new Exception($"No root entity found in aggregate object. Agg={typeof(TAgg)}, Root={typeof(TEntity)}");
-				}
-				roots.Add(rootEnt);
-			}
-
-			await InsertRoots(roots, Ct);
-			foreach(var (includeType, rows) in includeRows){
-				if(rows.Count == 0){
-					continue;
-				}
-				if(!includeTypeInclude.TryGetValue(includeType, out var include)){
-					continue;
-				}
-				await InsertInclude(include, rows, Ct);
-			}
-
-			return NIL;
-		}, batchSize);
-
-		await foreach(var agg in NewAgg.WithCancellation(Ct)){
-			await batch.Add(agg, Ct);
+		var roots = new List<TEntity>(BatchAgg.Count);
+		var includeRows = new Dictionary<Type, IList<obj>>();
+		foreach(var include in aggReg.Includes){
+			includeRows[include.EntityType] = new List<obj>();
 		}
-		await batch.End(Ct);
 
-		return new RespBatAddAgg();
+		foreach(var agg in BatchAgg){
+			if(agg is null){
+				throw new Exception($"Aggregate item is null. Agg={typeof(TAgg)}");
+			}
+			var aggObj = (obj)agg;
+
+			TEntity? rootEnt = null;
+			var oneToOneSeen = new HashSet<Type>();
+			foreach(var key in aggAccessor.GetGetterNames(aggObj)){
+				if(!aggAccessor.TryGet(aggObj, key, out var val) || val is null){
+					continue;
+				}
+
+				if(rootEnt is null && aggReg.RootEntityType.IsAssignableFrom(val.GetType())){
+					if(val is not TEntity castRoot){
+						throw new Exception($"Aggregate root value type mismatch. Agg={typeof(TAgg)}, Root={typeof(TEntity)}, ValueType={val.GetType()}");
+					}
+					rootEnt = castRoot;
+					continue;
+				}
+
+				if(val is IEnumerable enumerable && val is not string){
+					foreach(var item in enumerable){
+						if(item is null){
+							continue;
+						}
+						var itemType = item.GetType();
+						var include = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(itemType));
+						if(include is null){
+							continue;
+						}
+						if(include.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(include.EntityType)){
+							throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={include.EntityType}");
+						}
+						includeRows[include.EntityType].Add(item);
+						oneToOneSeen.Add(include.EntityType);
+					}
+					continue;
+				}
+
+				var valType = val.GetType();
+				var includeOne = aggReg.Includes.FirstOrDefault(x=>x.EntityType.IsAssignableFrom(valType));
+				if(includeOne is null){
+					continue;
+				}
+				if(includeOne.RelKind == EAggRelKind.OneToOne && oneToOneSeen.Contains(includeOne.EntityType)){
+					throw new Exception($"OneToOne include got multiple values in same aggregate. Agg={typeof(TAgg)}, Include={includeOne.EntityType}");
+				}
+				includeRows[includeOne.EntityType].Add(val);
+				oneToOneSeen.Add(includeOne.EntityType);
+			}
+
+			if(rootEnt is null){
+				throw new Exception($"No root entity found in aggregate object. Agg={typeof(TAgg)}, Root={typeof(TEntity)}");
+			}
+			roots.Add(rootEnt);
+		}
+
+		await InsertRoots(roots, Ct);
+		foreach(var (includeType, rows) in includeRows){
+			if(rows.Count == 0){
+				continue;
+			}
+			if(!includeTypeInclude.TryGetValue(includeType, out var include)){
+				continue;
+			}
+			await InsertInclude(include, rows, Ct);
+		}
+
+		return NIL;
 	}
 
 	private async Task<nil> BatDelAggByIdCore<TAgg>(
@@ -963,6 +1005,22 @@ Func<
 		,bool SoftDelete
 		,CT Ct
 	){
+		// 流式版:批原語(IN 段批大小)切塊 → IList 批核心。
+		await SqlFlow.BatchesInOnly(Ids, (BatchIds, Ct2)=> BatDelAggByIdListCore<TAgg>(Ctx, BatchIds, SoftDelete, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return NIL;
+	}
+
+	// ■ 聚合級聯刪批核心(吃 IList 一批):根 + 每個 include 資產各一次 IN 刪除(硬刪 DELETE / 軟刪 UPDATE)。
+	// 「一批」的粒度:進來的 List 有多長就拼多長、一次寫完;批大小/切批是調用方(原語)的職責。
+	private async Task<nil> BatDelAggByIdListCore<TAgg>(
+		IDbFnCtx Ctx
+		,IList<TId> BatchIds
+		,bool SoftDelete
+		,CT Ct
+	){
+		if(BatchIds.Count == 0){
+			return NIL;
+		}
 		var aggReg = TblMgr.GetAgg<TAgg>();
 		if(aggReg.RootEntityType != typeof(TEntity)){
 			throw new Exception($"Agg root type mismatch. Agg={typeof(TAgg)}, ExpectedRoot={typeof(TEntity)}, RegisteredRoot={aggReg.RootEntityType}");
@@ -970,8 +1028,6 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
-
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 50ul : 500ul;
 
 		str MkDelSql(ITable tbl, str codeCol, u64 cnt, bool softDelete){
 			var idParams = tbl.NumParams(cnt).ToList();
@@ -1012,31 +1068,19 @@ Func<
 			return arg;
 		}
 
-		await using var batch = new BatchCollector<TId, nil>(async(batchIds, Ct)=>{
-			if(batchIds.Count == 0){
-				return NIL;
-			}
-			var cnt = (u64)batchIds.Count;
-
-			{
-				var cmd = await GetRootCmd(cnt, Ct);
-				var arg = MkArg(T, T.CodeIdName, batchIds);
-				await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
-			}
-
-			foreach(var include in aggReg.Includes){
-				var cmd = await GetIncludeCmd(include, cnt, Ct);
-				var arg = MkArg(include.Tbl, include.FKeyCodeCol, batchIds);
-				await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
-			}
-
-			return NIL;
-		}, batchSize);
-
-		await foreach(var id in Ids.WithCancellation(Ct)){
-			await batch.Add(id, Ct);
+		var cnt = (u64)BatchIds.Count;
+		{
+			var cmd = await GetRootCmd(cnt, Ct);
+			var arg = MkArg(T, T.CodeIdName, BatchIds);
+			await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
 		}
-		await batch.End(Ct);
+
+		foreach(var include in aggReg.Includes){
+			var cmd = await GetIncludeCmd(include, cnt, Ct);
+			var arg = MkArg(include.Tbl, include.FKeyCodeCol, BatchIds);
+			await cmd.RawArgs(arg).AsyE1d(Ct).FirstOrDefaultAsync(Ct);
+		}
+
 		return NIL;
 	}
 
@@ -1047,6 +1091,14 @@ Func<
 
 	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
 		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
+		return new RespSoftDelAggInId();
+	}
+
+	// ■ IList 版:函數只管一批——整批聚合級聯軟刪一次完成(IN 語義)。
+	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IList<TId> Ids, CT Ct) {
+		if(Ids.Count > 0){
+			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, true, Ct);
+		}
 		return new RespSoftDelAggInId();
 	}
 	
@@ -1107,33 +1159,47 @@ Func<
 	){
 		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
 		// 批大小用寫入策略;存在判定用等值批量查(位置對齊),不重發 IN。
-		await SqlFlow.BatchesInOnly<TEntity>(Ents, async(EntList, Ct2)=>{
-			if(EntList.Count == 0){
-				return NIL;
-			}
-			var Ids = EntList.Select(x => {
-				var idObj = T.GetEntityId(x);
-				if(idObj is not TId id){
-					throw new Exception($"Entity id type mismatch. Entity={typeof(TEntity)}, Id={idObj?.GetType()}, Expected={typeof(TId)}");
-				}
-				return id;
-			}).ToList();
-			// Upsert 以主鍵是否已存在為準，軟刪行也必須算存在(避免撞主鍵唯一約束誤插)
-			var Exists = await BatExistsByIdCore(Ctx, Ids, true, Ct2);
-			var toInsert = new List<TEntity>();
-			var toUpdate = new List<TEntity>();
-			for(i32 i = 0; i < EntList.Count; i++){
-				(Exists[i] ? toUpdate : toInsert).Add(EntList[i]);
-			}
-			if(toInsert.Count > 0){
-				await BatOrdAddCore(Ctx, toInsert, Ct2);
-			}
-			if(toUpdate.Count > 0){
-				var Flds = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
-				await BatUpdCore(Ctx, toUpdate, Flds, Ct2);
-			}
+		await SqlFlow.BatchesInOnly<TEntity>(Ents, (EntList, Ct2)=> BatOrdUpsertCore(Ctx, EntList, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new RespBatUpsert();
+	}
+
+	// ■ Upsert 批核心(吃 IList 一批):逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 各一次同構批量寫。
+	// 「一批」的粒度:進來的 List 有多長就拼多長、一次寫完;批大小/切批是調用方(原語)的職責。
+	private async Task<nil> BatOrdUpsertCore(IDbFnCtx Ctx, IList<TEntity> EntList, CT Ct){
+		if(EntList.Count == 0){
 			return NIL;
-		}, Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		}
+		var Ids = EntList.Select(x => {
+			var idObj = T.GetEntityId(x);
+			if(idObj is not TId id){
+				throw new Exception($"Entity id type mismatch. Entity={typeof(TEntity)}, Id={idObj?.GetType()}, Expected={typeof(TId)}");
+			}
+			return id;
+		}).ToList();
+		// Upsert 以主鍵是否已存在為準，軟刪行也必須算存在(避免撞主鍵唯一約束誤插)
+		var Exists = await BatExistsByIdCore(Ctx, Ids, true, Ct);
+		var toInsert = new List<TEntity>();
+		var toUpdate = new List<TEntity>();
+		for(i32 i = 0; i < EntList.Count; i++){
+			(Exists[i] ? toUpdate : toInsert).Add(EntList[i]);
+		}
+		if(toInsert.Count > 0){
+			await BatOrdAddCore(Ctx, toInsert, Ct);
+		}
+		if(toUpdate.Count > 0){
+			var Flds = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
+			await BatUpdCore(Ctx, toUpdate, Flds, Ct);
+		}
+		return NIL;
+	}
+
+	// ■ IList 版 OrdUpsert:函數只管一批——整批一次完成(批大小/切批是調用方/原語的職責)。
+	public async Task<IRespBatUpsert> OrdUpsert(
+		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
+	){
+		if(Ents.Count > 0){
+			await BatOrdUpsertCore(Ctx, Ents, Ct);
+		}
 		return new RespBatUpsert();
 	}
 

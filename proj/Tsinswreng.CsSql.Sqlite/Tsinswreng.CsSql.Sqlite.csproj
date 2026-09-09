@@ -1,6 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 	<ItemGroup>
 		<ProjectReference Include="../Tsinswreng.CsSql/Tsinswreng.CsSql.csproj" />
 		<ProjectReference Include="../Tsinswreng.CsSql.BaseImpl/Tsinswreng.CsSql.BaseImpl.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
 	</ItemGroup>
 </Project>

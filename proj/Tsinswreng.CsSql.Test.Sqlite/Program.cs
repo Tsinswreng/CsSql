@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tsinswreng.CsSql;
 using Tsinswreng.CsSql.Sqlite;
+using Tsinswreng.CsSql.Sqlite.Di;
 using Tsinswreng.CsSql.Test;
 using Tsinswreng.CsSql.Test.Domains;
 using Tsinswreng.CsTreeTest;
@@ -39,19 +40,16 @@ internal class Program {
 		var conn = new SqliteConnection($"Data Source={dbPath}");
 		await conn.OpenAsync();
 
+		// 表管理器:先配好全部測試域的表,再交給接入擴展
+		var TblMgr = new SqliteTblMgr { };
+		TestTblMgrIniter.Init(TblMgr);
+
 		SvcColct
-			.AddSingleton<IDbConnection>(conn)
-			.AddSingleton<IDbConnMgr>(new SingletonDbConnGetter(conn))
 			.AddSingleton<IPropAccessorReg>(TestDictMapper.Inst)
-			.AddScoped<ISqlCmdMkr, SqliteCmdMkr>()
-			.AddSingleton<ITblMgr>(_ => {
-				var mgr = new SqliteTblMgr { };
-				TestTblMgrIniter.Init(mgr);
-				return mgr;
+			.AddCsSqlSqlite(new SqliteCfg {
+				Connection = conn
+				,TblMgr = TblMgr
 			})
-			.AddScoped<IMkrTxn, SqliteCmdMkr>()
-			.AddScoped<ITxnRunner, AdoTxnRunner>()
-			.AddScoped<TxnWrapper>()
 			.AddRepoScoped<TestKv, IdTestKv>()
 			.AddRepoScoped<TestWord, IdTestWord>()
 			.AddRepoScoped<TestWordProp, IdTestWordProp>()

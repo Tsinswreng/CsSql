@@ -3,6 +3,7 @@ using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Tsinswreng.CsSql;
 using Tsinswreng.CsSql.Postgres;
+using Tsinswreng.CsSql.Postgres.Di;
 using Tsinswreng.CsSql.Test;
 using Tsinswreng.CsSql.Test.Domains;
 using Tsinswreng.CsTreeTest;
@@ -22,22 +23,18 @@ internal class Program {
 	public static async Task Main(string[] args) {
 		// 連 WSL docker 內的 pg(見倉庫根 docker-compose.yml:5433→5432)
 		const str ConnStr = "Host=localhost;Port=5433;Database=csql_bench;Username=postgres;Password=CsqlBench";
-		await using var conn = new NpgsqlConnection(ConnStr);
-		await conn.OpenAsync();
+		var DataSource = new NpgsqlDataSourceBuilder(ConnStr).Build();
+
+		// 表管理器:先配好全部測試域的表,再交給接入擴展
+		var TblMgr = new PostgresTblMgr { };
+		TestTblMgrIniter.Init(TblMgr);
 
 		SvcColct
-			.AddSingleton<IDbConnection>(conn)
-			.AddSingleton<IDbConnMgr>(new SingletonDbConnGetter(conn))
 			.AddSingleton<IPropAccessorReg>(TestDictMapper.Inst)
-			.AddScoped<ISqlCmdMkr, PostgresCmdMkr>()
-			.AddSingleton<ITblMgr>(_ => {
-				var mgr = new PostgresTblMgr { };
-				TestTblMgrIniter.Init(mgr);
-				return mgr;
+			.AddCsSqlPostgres(new PostgresCfg {
+				DataSource = DataSource
+				,TblMgr = TblMgr
 			})
-			.AddScoped<IMkrTxn, PostgresCmdMkr>()
-			.AddScoped<ITxnRunner, AdoTxnRunner>()
-			.AddScoped<TxnWrapper>()
 			.AddRepoScoped<TestKv, IdTestKv>()
 			.AddRepoScoped<TestWord, IdTestWord>()
 			.AddRepoScoped<TestWordProp, IdTestWordProp>()
@@ -47,7 +44,7 @@ internal class Program {
 		var mgr = CsSqlTestMgr.Inst;
 		SvcProvdr = mgr.InitSvc(SvcColct, sc => sc.BuildServiceProvider());
 
-		// 建表(測試域所有表;pg 兼容 DDL:顯式 "BLOB" 已從測試域移除,由類型映射器決定 bytea)
+		// 建表(pg 兼容 DDL:顯式 "BLOB" 已從測試域移除,由類型映射器決定 bytea)
 		var cmdMkr = SvcProvdr.GetRequiredService<ISqlCmdMkr>();
 		var tblMgr = SvcProvdr.GetRequiredService<ITblMgr>();
 		var schemaSql = tblMgr.SqlMkSchema();

@@ -17,7 +17,7 @@ namespace Tsinswreng.CsSql.Test.Sqlite;
 /// </summary>
 internal class Program {
 	public static IServiceCollection SvcColct = new ServiceCollection();
-	public static IServiceProvider SvcProvdr = null!;
+	public static IServiceProvider SvcProvdr => Tsinswreng.CsSql.Test.Di.SvcProvider;
 
 	public static async Task Main(string[] args) {
 		// sqlite 文件庫(工作區內):測試後刪除。照 Ngan.Dict 的做法(文件庫在連接關閉重開後數據仍在,
@@ -57,7 +57,11 @@ internal class Program {
 		;
 
 		var mgr = CsSqlTestMgr.Inst;
-		SvcProvdr = mgr.InitSvc(SvcColct, sc => sc.BuildServiceProvider());
+		_ = mgr.InitSvc(SvcColct, sc => {
+			var sp = sc.BuildServiceProvider();
+			Tsinswreng.CsSql.Test.Di.SvcProvider = sp;
+			return sp;
+		});
 
 		// 建表(文件庫建一次,所有測試共用)。
 		var cmdMkr = SvcProvdr.GetRequiredService<ISqlCmdMkr>();

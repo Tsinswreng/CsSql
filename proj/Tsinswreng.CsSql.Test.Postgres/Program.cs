@@ -18,7 +18,7 @@ namespace Tsinswreng.CsSql.Test.Postgres;
 /// </summary>
 internal class Program {
 	public static IServiceCollection SvcColct = new ServiceCollection();
-	public static IServiceProvider SvcProvdr = null!;
+	public static IServiceProvider SvcProvdr => Tsinswreng.CsSql.Test.Di.SvcProvider;
 
 	public static async Task Main(string[] args) {
 		// 連 WSL docker 內的 pg(見倉庫根 docker-compose.yml:5433→5432)
@@ -42,7 +42,11 @@ internal class Program {
 		;
 
 		var mgr = CsSqlTestMgr.Inst;
-		SvcProvdr = mgr.InitSvc(SvcColct, sc => sc.BuildServiceProvider());
+		_ = mgr.InitSvc(SvcColct, sc => {
+			var sp = sc.BuildServiceProvider();
+			Tsinswreng.CsSql.Test.Di.SvcProvider = sp;
+			return sp;
+		});
 
 		// 建表(pg 兼容 DDL:顯式 "BLOB" 已從測試域移除,由類型映射器決定 bytea)
 		var cmdMkr = SvcProvdr.GetRequiredService<ISqlCmdMkr>();

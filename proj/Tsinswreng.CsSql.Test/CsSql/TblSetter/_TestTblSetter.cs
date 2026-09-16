@@ -5,13 +5,7 @@ using Tsinswreng.CsTreeTest;
 namespace Tsinswreng.CsSql.Test.CsSql.TblSetter;
 
 public partial class TestTblSetter : ITester {
-	readonly ITblMgr TblMgr;
-
-	public TestTblSetter(
-		ITblMgr TblMgr
-	) {
-		this.TblMgr = TblMgr;
-	}
+	readonly ITblMgr TblMgr = GetRSvc<ITblMgr>();
 
 	public ITestNode RegisterTestsInto(ITestNode? Test) {
 		Test ??= new TestNode();

@@ -10,39 +10,22 @@ namespace Tsinswreng.CsSql.Test.CsSql.Repo;
 /// </summary>
 public partial class TestRepo : ITester {
 	/// <summary>SQL 命令建立器,讓每個資料庫用例在同一交易上下文中執行。</summary>
-	readonly ISqlCmdMkr SqlCmdMkr;
+	readonly ISqlCmdMkr SqlCmdMkr = GetRSvc<ISqlCmdMkr>();
 
 	/// <summary>資料表註冊中心,供需要直接測試 ITable overload 的用例取得表定義。</summary>
-	readonly ITblMgr TblMgr;
+	readonly ITblMgr TblMgr = GetRSvc<ITblMgr>();
 
 	/// <summary>測試域通用鍵值資料的 Repository。</summary>
-	readonly IRepo<TestKv, IdTestKv> Repo;
+	readonly IRepo<TestKv, IdTestKv> Repo = GetRSvc<IRepo<TestKv, IdTestKv>>();
 
 	/// <summary>聚合根 Repository。</summary>
-	readonly IRepo<TestWord, IdTestWord> RepoWord;
+	readonly IRepo<TestWord, IdTestWord> RepoWord = GetRSvc<IRepo<TestWord, IdTestWord>>();
 
 	/// <summary>聚合子(屬性) Repository。</summary>
-	readonly IRepo<TestWordProp, IdTestWordProp> RepoProp;
+	readonly IRepo<TestWordProp, IdTestWordProp> RepoProp = GetRSvc<IRepo<TestWordProp, IdTestWordProp>>();
 
 	/// <summary>聚合子(學習記錄) Repository。</summary>
-	readonly IRepo<TestWordLearn, IdTestWordLearn> RepoLearn;
-
-	/// <summary>建立 Repository 測試器,依賴均由測試管理員的 DI 容器提供。</summary>
-	public TestRepo(
-		ISqlCmdMkr SqlCmdMkr
-		,ITblMgr TblMgr
-		,IRepo<TestKv, IdTestKv> Repo
-		,IRepo<TestWord, IdTestWord> RepoWord
-		,IRepo<TestWordProp, IdTestWordProp> RepoProp
-		,IRepo<TestWordLearn, IdTestWordLearn> RepoLearn
-	) {
-		this.SqlCmdMkr = SqlCmdMkr;
-		this.TblMgr = TblMgr;
-		this.Repo = Repo;
-		this.RepoWord = RepoWord;
-		this.RepoProp = RepoProp;
-		this.RepoLearn = RepoLearn;
-	}
+	readonly IRepo<TestWordLearn, IdTestWordLearn> RepoLearn = GetRSvc<IRepo<TestWordLearn, IdTestWordLearn>>();
 
 	/// <summary>組裝 IRepo 各 API 的測試節點;資料庫用例保持順序執行,避免共享庫互相干擾。</summary>
 	public ITestNode RegisterTestsInto(ITestNode? Test) {

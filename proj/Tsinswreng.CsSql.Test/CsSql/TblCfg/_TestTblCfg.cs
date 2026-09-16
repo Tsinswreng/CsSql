@@ -11,14 +11,7 @@ namespace Tsinswreng.CsSql.Test.CsSql.TblCfg;
 /// </summary>
 public partial class TestTblCfg : ITester {
 	/// <summary>DI 提供的表註冊中心。測試只借用它的 SqlMkr(Quote/Param 行為),不註冊任何表、不碰 DB。</summary>
-	readonly ITblMgr TblMgr;
-
-	/// <summary>建配置層測試器,依賴由測試管理員的 DI 容器提供。</summary>
-	public TestTblCfg(
-		ITblMgr TblMgr
-	) {
-		this.TblMgr = TblMgr;
-	}
+	readonly ITblMgr TblMgr = GetRSvc<ITblMgr>();
 
 	/// <summary>組裝配置層各 API 的測試節點。</summary>
 	public ITestNode RegisterTestsInto(ITestNode? Test) {

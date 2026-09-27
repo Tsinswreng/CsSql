@@ -27,7 +27,7 @@ internal class Program {
 
 	/// <summary>
 	/// pg 測試域手寫建表 SQL:測試域 DDL 是 sqlite 語法(BLOB/INTEGER 直接入 DDL,
-	/// 見 ExtnITable.SqlMkTbl:Col.DbType 非空時原樣使用),pg 需要 bytea/text/bigint。
+	/// 見 ITableExtn.SqlMkTbl:Col.DbType 非空時原樣使用),pg 需要 bytea/text/bigint。
 	/// 列順序與表定義一致,供二進制 COPY 使用。
 	/// </summary>
 	const str PgCreateTestKvSql = """

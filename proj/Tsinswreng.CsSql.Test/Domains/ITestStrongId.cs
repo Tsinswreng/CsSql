@@ -19,7 +19,7 @@ public partial interface ITestStrongId
 /// 強類型 Id 的類型映射與工具擴展。
 /// 主鍵在數據庫中存 u8[] BLOB,經此映射在 實體 Id 與 原始位元組 之間轉換。
 /// </summary>
-public static class ExtnITestStrongId{
+public static class ITestStrongIdExtn{
 	extension<T>(T z)
 		where T:struct, ITestStrongId
 	{

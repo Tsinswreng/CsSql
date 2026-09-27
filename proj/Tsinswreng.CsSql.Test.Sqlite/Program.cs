@@ -78,7 +78,7 @@ internal class Program {
 }
 
 /// <summary>測試入口的 IRepo 註冊助手(照 Ngan.Dict 的 AddRepoScoped)。</summary>
-static class ExtnTestSqliteDi {
+static class TestSqliteDiExtn {
 	public static IServiceCollection AddRepoScoped<TEntity, TId>(this IServiceCollection z)
 		where TEntity : class, new() {
 		z.AddScoped<IRepo<TEntity, TId>, SqlRepo<TEntity, TId>>();

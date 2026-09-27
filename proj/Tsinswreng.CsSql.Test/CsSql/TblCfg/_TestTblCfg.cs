@@ -5,7 +5,7 @@ using Tsinswreng.CsTreeTest;
 namespace Tsinswreng.CsSql.Test.CsSql.TblCfg;
 
 /// <summary>
-/// 配置層(SchemaCfg)測試:Table/IColumn/ColMkr/ExtnITable/ITblMgr 的 SQL 生成行為。
+/// 配置層(SchemaCfg)測試:Table/IColumn/ColMkr/ITableExtn/ITblMgr 的 SQL 生成行為。
 /// 全部為純字符串斷言,不開 DB 連接、不建表;sqlite/pg 兩個入口共用同一批用例。
 /// 斷言策略:列以顯式 DbType 為主使兩端輸出一致,僅「無 DbType 走類型映射」按 DbSrcType 分支預期。
 /// </summary>

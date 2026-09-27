@@ -15,7 +15,7 @@ public static class TestTblMgrIniter {
 		tbl.Tbl.CodeIdName = nameof(PoAllBasicTypes.Id);
 
 		// Id/BlobVal 不顯式設 DbType:由各 DB 類型映射器決定(sqlite→BLOB、pg→bytea),
-		// 否則 "BLOB" 會原樣進 pg 的 CREATE TABLE 報錯(見 ExtnITable.SqlMkTbl:DbType 非空時直接入 DDL)
+		// 否則 "BLOB" 會原樣進 pg 的 CREATE TABLE 報錯(見 ITableExtn.SqlMkTbl:DbType 非空時直接入 DDL)
 		tbl.Col(nameof(PoAllBasicTypes.Id))
 			.NotNull()
 			.AdditionalSqls(["PRIMARY KEY"]);

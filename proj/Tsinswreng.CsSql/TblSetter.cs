@@ -154,7 +154,7 @@ ON {Tbl.Qt(Tbl.DbTblName)} ({str.Join(", ", flds)})
 	}
 }
 
-public static class ExtnITblSetter {
+public static class ITblSetterExtn {
 	extension<TEntity>(ITblSetter<TEntity> z){
 		public ColMkr<TEntity, obj?, obj?> Col(
 			str NameInCode

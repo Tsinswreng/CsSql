@@ -102,7 +102,7 @@ public partial class ArgDict: IArgDict{
 }
 
 
-public static class ExtnArgDict{
+public static class ArgDictExtn{
 	extension(IArgDict z){
 		[Doc(@$"
 		#Params([Page Query], [Param for Limit], [Param for Offset])

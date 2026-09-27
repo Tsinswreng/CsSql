@@ -45,7 +45,7 @@ public interface IResultReader{
 }
 
 
-public static class ExtnTaskIResultReader{
+public static class TaskIResultReaderExtn{
 	extension(Task<IResultReader> z){
 		public async IAsyncEnumerable<
 			IAsyncEnumerable<IDictionary<str, obj?>>

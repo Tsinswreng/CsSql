@@ -5,7 +5,7 @@ using System.Collections;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
-public static class ExtnISqlCmdMkr{
+public static class ISqlCmdMkrExtn{
 	private static bool IsTxnCompletedException(Exception ex){
 		return ex is InvalidOperationException && ex.Message.Contains("completed", StringComparison.OrdinalIgnoreCase);
 	}

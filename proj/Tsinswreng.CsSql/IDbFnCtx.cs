@@ -20,7 +20,7 @@ public partial interface IDbFnCtx
 	public IDbConnection? DbConn{get;set;}
 	
 	//public IDictionary<obj, obj?>? Props{get;set;}
-	[Doc(@$"Use {nameof(ExtnIDbFnCtx.AddToAsyDispose)} instead of directory operate on {nameof(ObjsToDispose)}")]
+	[Doc(@$"Use {nameof(IDbFnCtxExtn.AddToAsyDispose)} instead of directory operate on {nameof(ObjsToDispose)}")]
 	public ICollection<obj?>? ObjsToDispose{get;set;}
 #if Impl
 	 = new List<obj?>();

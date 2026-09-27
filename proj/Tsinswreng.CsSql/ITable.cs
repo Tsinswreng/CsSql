@@ -30,7 +30,7 @@ public partial interface ITable{
 
 	[Doc($@"Columns in the table
 	Key: CodeColName (property name in entity class)
-	#See[{nameof(ExtnITable.GetCol)}]
+	#See[{nameof(ITableExtn.GetCol)}]
 	")]
 	public IDictionary<str, IColumn> Columns{get;set;}
 #if Impl

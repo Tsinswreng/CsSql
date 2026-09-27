@@ -2,7 +2,7 @@ namespace Tsinswreng.CsSql;
 
 /// 與業務無關的遷移管理輔助函數。
 /// 用於按 CreatedMs 去重註冊遷移，避免 Local/Biz 重複寫相同邏輯。
-public static class ExtnMigrationMgr{
+public static class MigrationMgrExtn{
 	extension(IMigrationMgr z){
 		/// 判斷某個 `CreatedMs` 的遷移是否已註冊。
 		///

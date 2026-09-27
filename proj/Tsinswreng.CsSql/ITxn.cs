@@ -14,7 +14,7 @@ public partial interface ITxn : IDisposable{
 }
 
 
-public static class ExtnITxn{
+public static class ITxnExtn{
 	/// run a function in a transaction
 	public static async Task<TRet> RunTxn<TRet>(
 		this ITxn Txn

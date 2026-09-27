@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-public static class ExtnTblMgr{
+public static class TblMgrExtn{
 	extension<TSelf>(TSelf z)
 		where TSelf: ITblMgr
 	{

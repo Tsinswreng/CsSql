@@ -113,7 +113,7 @@ Level 3: List of all entities matching that type and key
 #Sum[Strongly-typed extension methods for IAggBuildCtx that avoid boxing/unboxing.]
 #Descr[These provide generic versions of GetMany and GetOne. Example: Instead of ctx.GetOne(typeof(User), userId) and casting, use ctx.GetOne<User, IdUser>(userId) for type safety.]
 """)]
-public static partial class ExtnAggQryCtx {
+public static partial class AggQryCtxExtn {
 	extension(IAggQryCtx z) {
 		[Doc(@"""
 	#Sum[Retrieve all related entities of type TPo with key TKey.]

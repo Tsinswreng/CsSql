@@ -3,7 +3,7 @@ namespace Tsinswreng.CsSql;
 /// `SchemaHistory` 倉儲的通用輔助函數。
 ///
 /// 這些邏輯與 Local/Biz 業務均無關，因此統一收斂到 `CsSql`。
-public static class ExtnSchemaHistoryRepo{
+public static class SchemaHistoryRepoExtn{
 	extension(IRepo<SchemaHistory, i64> z)
 	{
 		/// 將 `SchemaHistory` 倉儲的 `TypeInfoSrc` 統一綁定到 `CsSqlTypeInfo` 的反射來源。

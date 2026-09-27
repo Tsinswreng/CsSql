@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-public static partial class ExtnIDbFnCtx{
+public static partial class IDbFnCtxExtn{
 	extension<TSelf>(TSelf z)
 		where TSelf: IDbFnCtx
 	{

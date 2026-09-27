@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Tsinswreng.CsSql;
 
-public static class ExtnDbParameterCollection {
+public static class DbParameterCollectionExtn {
 	extension<TSelf>(TSelf z)
 		where TSelf:DbParameterCollection
 	{

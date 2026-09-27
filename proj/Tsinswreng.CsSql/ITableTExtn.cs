@@ -6,7 +6,7 @@ using Tsinswreng.CsPage;
 using Tsinswreng.CsTools;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
-public static partial class ExtnITableT{
+public static partial class ITableTExtn{
 	extension<T>(ITable<T> z)
 		where T:new()
 	{

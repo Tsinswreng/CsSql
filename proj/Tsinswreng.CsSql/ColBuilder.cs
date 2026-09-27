@@ -24,7 +24,7 @@ public class ColMkr<TTbl, TRaw, TUpper>:ColMkr{
 }
 
 
-public static class ExtnColMkr{
+public static class ColMkrExtn{
 	extension(ITable z){
 		public Self Col(
 			str NameInCode

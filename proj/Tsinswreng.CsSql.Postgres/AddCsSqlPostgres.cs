@@ -9,7 +9,7 @@ using Tsinswreng.CsSql;
 /// 使用方只需提供數據源與表管理器,其餘(IDbConnMgr/ISqlCmdMkr/IMkrTxn/ITxnRunner/IMkrDbFnCtx/TxnWrapper)由本方法註冊;
 /// 遷移清單、每實體 Repo、映射註冊是業務內容,仍由使用方自己註冊。
 /// </summary>
-public static class ExtnCsSqlPostgresDi{
+public static class CsSqlPostgresDiExtn{
 	/// <summary>註冊 PostgreSQL 接入所需全部固定服務,返回同一集合以便鏈式繼續註冊業務服務。</summary>
 	public static IServiceCollection AddCsSqlPostgres(
 		this IServiceCollection z

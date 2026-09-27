@@ -10,7 +10,7 @@ public partial class TestTblCfg {
 		var register = Node.MkTestFnRegister(
 			typeof(TestTblCfg)
 			,[typeof(ITable)]
-			,[nameof(ExtnITable.SqlMkTbl)]
+			,[nameof(ITableExtn.SqlMkTbl)]
 			,nameof(TestTblCfg)
 		);
 		var R = register.Register;

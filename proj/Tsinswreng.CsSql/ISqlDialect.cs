@@ -18,7 +18,7 @@ public partial interface ISqlDialect:I_DbSrcType{
 }
 
 
-public static class ExtnISqlDialect{
+public static class ISqlDialectExtn{
 	public static str ParamLimOfst(
 		this ISqlDialect z
 		,str Limit, str Offset

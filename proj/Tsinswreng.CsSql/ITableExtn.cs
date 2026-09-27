@@ -9,7 +9,7 @@ using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
 using Tsinswreng.CsU128Id;
 
-public static class ExtnITable {
+public static class ITableExtn {
 	extension(ITable z) {
 		[Doc($"""
 		Quote field name for SQL, e.g. in sqlite: "field_name"; in mysql: `field_name`;
@@ -47,7 +47,7 @@ public static class ExtnITable {
 		}
 
 		[Doc(@$"#Sum[Map entity field name to quoted database column name.]
-		#See[{nameof(DbColName)} then {nameof(ExtnITable.Qt)}]
+		#See[{nameof(DbColName)} then {nameof(ITableExtn.Qt)}]
 		")]
 		public str QtCol(
 			str CodeColName

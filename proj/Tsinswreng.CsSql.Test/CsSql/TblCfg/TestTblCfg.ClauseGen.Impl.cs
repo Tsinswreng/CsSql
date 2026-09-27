@@ -11,10 +11,10 @@ public partial class TestTblCfg {
 			typeof(TestTblCfg)
 			,[typeof(ITable<TestKv>)]
 			,[
-				nameof(ExtnITable.UpdateClause)
-				,nameof(ExtnITable.InsertClause)
-				,nameof(ExtnITable.InsertManyClause)
-				,nameof(ExtnITable.NumParamClause)
+				nameof(ITableExtn.UpdateClause)
+				,nameof(ITableExtn.InsertClause)
+				,nameof(ITableExtn.InsertManyClause)
+				,nameof(ITableExtn.NumParamClause)
 			]
 			,nameof(TestTblCfg)
 		);

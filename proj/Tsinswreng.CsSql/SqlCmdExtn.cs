@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 
 namespace Tsinswreng.CsSql;
-public static class ExtnSqlCmd{
+public static class SqlCmdExtn{
 	extension(ISqlCmd z){
 		
 		public async IAsyncEnumerable<IDictionary<str, obj?>> AsyE1d(

@@ -1,8 +1,8 @@
-namespace Tsinswreng.CsSql;
+﻿namespace Tsinswreng.CsSql;
 
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-
 
 using Tsinswreng.CsCore;
 using Tsinswreng.CsTools;
@@ -809,14 +809,14 @@ Func<
 		return new BatHardDel();
 	}
 
-	public async Task<IRespBatAddAgg> OrdAddAgg<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
 		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		await SqlFlow.BatchesInOnly(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct, batchSize);
 		return new RespBatAddAgg();
 	}
 
 	// ■ IList 版 OrdAddAgg:函數只管一批——整批聚合級聯插入一次完成。
-	public async Task<IRespBatAddAgg> OrdAddAgg<TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
+	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
 		if(Aggs.Count > 0){
 			await BatOrdAddAggCore<TAgg>(Ctx, Aggs, Ct);
 		}
@@ -825,7 +825,9 @@ Func<
 
 	// ■ 聚合級聯插入批核心(吃 IList 一批):校驗聚合註冊與訪問器後、根與每個 include 資產各拼一次同構批量 INSERT。
 	// 「一批」的粒度:進來的 List 有多長就拼多長、一次寫完;批大小/切批是調用方(原語)的職責。
-	private async Task<nil> BatOrdAddAggCore<TAgg>(
+	// TAgg 上的 DAM：本方法要把 typeof(TAgg) 交給 CsRefl 的來源去找聚合的根成員，
+	// 少了它 NativeAOT 剪裁後讀不出成員，會拋「No root entity found in aggregate object」。
+	private async Task<nil> BatOrdAddAggCore<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> BatchAgg, CT Ct
 	){
 		if(BatchAgg.Count == 0){
@@ -1106,13 +1108,13 @@ Func<
 		return new RespSoftDelAggInId();
 	}
 	
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, false, Ct);
 	}
 
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, true, Ct);
@@ -1207,7 +1209,8 @@ Func<
 		return new RespBatUpsert();
 	}
 
-	private async Task<IRespBatUpdAgg> BatUpdAggCore<TAgg>(
+	// TAgg 上的 DAM 同 OrdAddAgg：本方法要把 typeof(TAgg) 交給 CsRefl 的來源去找聚合的根成員。
+	private async Task<IRespBatUpdAgg> BatUpdAggCore<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> Agg
 		,bool SoftDeleteMissing

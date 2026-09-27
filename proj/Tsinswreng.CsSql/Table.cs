@@ -1,6 +1,7 @@
 #define Impl
 namespace Tsinswreng.CsSql;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Tsinswreng.CsCore;
 using Tsinswreng.CsPage;
@@ -73,7 +74,9 @@ public partial class Table:ITable{
 	")]
 	public static IDictionary<str, Type> GetCodeCol_UpperType(
 		ITypeInfoSrc TypeInfoSrc
-		,Type EntityClrType
+		// 本方法把型別交給 CsRefl 的來源，故要求調用方保證該型別的成員元資料會被保留。
+		// 少了這個註解，NativeAOT 剪裁後 Info.ReadableMembers 是空的，表也就一列都沒有。
+		,[DAM(ReflTypeInfo.ReflDam)] Type EntityClrType
 	){
 		if(!TypeInfoSrc.TryGetInfo(EntityClrType, out var Info) || Info is null){
 			throw new Exception($"No {nameof(ITypeInfo)} for entity type: {EntityClrType}");
@@ -96,7 +99,8 @@ public partial class Table:ITable{
 		return Mk<TEntity>(typeof(TEntity), TypeInfoSrc, DbTblName, Key_Type);
 	}
 
-	public static ITable<TEntity> Mk<TEntity>(
+	// TEntity 上的 DAM 是為了滿足 GetCodeCol_UpperType 的要求：呼叫方傳具體型別時要求就在那裏滿足。
+	public static ITable<TEntity> Mk<[DAM(ReflTypeInfo.ReflDam)] TEntity>(
 		ITypeInfoSrc TypeInfoSrc
 		,str DbTblName
 	){
@@ -125,30 +129,34 @@ public partial class Table:ITable{
 	
 
 	[Obsolete("")]
-		public static Func<str, ITable<T>> FnMkTbl<T>(ITypeInfoSrc TypeInfoSrc){
- 		ITable<T2> Mk<T2>(str DbTblName){
-				var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T2));
-			return Table.Mk<T2>(
-					TypeInfoSrc
-				,DbTblName
-				,TypeDict
-			);
-		}
-		return Mk<T>;
+		public static Func<str, ITable<T>> FnMkTbl<[DAM(ReflTypeInfo.ReflDam)] T>(ITypeInfoSrc TypeInfoSrc){
+		// 原本這裏是一個 local function；local function 的型別參數不能標特性，
+		// 故抽成下面的靜態方法，好把 DAM 要求標上，讓 typeof(T) 的元資料在 AOT 下不被剪掉。
+		return DbTblName => MkTblCore<T>(TypeInfoSrc, DbTblName);
+	}
+
+	static ITable<T> MkTblCore<[DAM(ReflTypeInfo.ReflDam)] T>(ITypeInfoSrc TypeInfoSrc, str DbTblName){
+		var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T));
+		return Table.Mk<T>(
+				TypeInfoSrc
+			,DbTblName
+			,TypeDict
+		);
 	}
 	
-		public static Func<str, ITblSetter<T>> FnSetTbl<T>(ITypeInfoSrc TypeInfoSrc){
-		ITblSetter<T2> Set<T2>(str DbTblName){
-				var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T2));
-			var Tbl = Table.Mk<T2>(
-					TypeInfoSrc
-				,DbTblName
-				,TypeDict
-			);
-			var R = new TblSetter<T2>(Tbl);
-			return R;
-		}
-		return Set<T>;
+		public static Func<str, ITblSetter<T>> FnSetTbl<[DAM(ReflTypeInfo.ReflDam)] T>(ITypeInfoSrc TypeInfoSrc){
+		// 同上：抽成靜態方法才標得上 DAM。
+		return DbTblName => MkTblSetterCore<T>(TypeInfoSrc, DbTblName);
+	}
+
+	static ITblSetter<T> MkTblSetterCore<[DAM(ReflTypeInfo.ReflDam)] T>(ITypeInfoSrc TypeInfoSrc, str DbTblName){
+		var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T));
+		var Tbl = Table.Mk<T>(
+				TypeInfoSrc
+			,DbTblName
+			,TypeDict
+		);
+		return new TblSetter<T>(Tbl);
 	}
 
 	[Impl]

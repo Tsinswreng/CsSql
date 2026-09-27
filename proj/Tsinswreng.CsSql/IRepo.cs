@@ -1,7 +1,9 @@
 //此文件中的API已廢棄
 namespace Tsinswreng.CsSql;
 
+using System.Diagnostics.CodeAnalysis;
 using Tsinswreng.CsPage;
+using Tsinswreng.CsRefl;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 
 [Doc(@$"
@@ -164,7 +166,7 @@ public partial interface IRepo<TEntity, TId>{
 	
 	#region Agg
 	
-	public Task<IRespBatAddAgg> OrdAddAgg<TAgg>(
+	public Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> NewAgg
 		,CT Ct
@@ -214,7 +216,7 @@ public partial interface IRepo<TEntity, TId>{
 		as what I passed to `{nameof(OrdHardUpdAgg)}`.
 		`Hard` means hard delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	
@@ -224,7 +226,7 @@ public partial interface IRepo<TEntity, TId>{
 		as what I passed to `{nameof(OrdHardUpdAgg)}`.
 		`Soft` means Soft delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<TAgg>(
+	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 	
@@ -382,7 +384,7 @@ public partial interface IRepo<TEntity, TId>{
 	/// IList 版 OrdAddAgg:把 List 內全部聚合一次級聯插入(根 + 全部 include 資產,各自同構批量)。
 	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
 	[Doc(@$"IList 版:`{nameof(OrdAddAgg)}` 的批一級形狀。根與 include 資產各一批同構插入、本批全部執行完畢才返回。")]
-	public Task<IRespBatAddAgg> OrdAddAgg<TAgg>(
+	public Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct
 	);
 

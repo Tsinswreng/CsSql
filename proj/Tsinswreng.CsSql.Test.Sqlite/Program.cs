@@ -45,6 +45,7 @@ internal class Program {
 		TestTblMgrIniter.Init(TblMgr);
 
 		SvcColct
+			// 型別元資料來源：測試域的反射來源，任何型別都能查。
 			.AddSingleton<ITypeInfoSrc>(TestDictMapper.Inst.TypeInfoSrc)
 			.AddCsSqlSqlite(new SqliteCfg {
 				Connection = conn

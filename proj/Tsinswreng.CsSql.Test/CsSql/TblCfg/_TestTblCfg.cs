@@ -27,6 +27,7 @@ public partial class TestTblCfg : ITester {
 
 	/// <summary>建一張 DbTblName 為 TblName 的 TestKv 表,掛上 DI 的 TblMgr 以獲得 SqlMkr。列由 Init 按實體屬性掃出。</summary>
 	ITable<TestKv> MkTbl(str TblName) {
+		// 列由型別元資料掃出；來源是測試域的反射來源。
 		var tbl = Table.Mk<TestKv>(TestDictMapper.Inst.TypeInfoSrc, TblName);
 		tbl.TblMgr = TblMgr;
 		return tbl;
@@ -41,6 +42,7 @@ public partial class TestTblCfg : ITester {
 		str TblName
 		,params (str Code, str DbName, Type? RawClrType, str DbType, bool NotNull, str[] AddSqls)[] Cols
 	) {
+		// 手動裝列，故型別元資料來源不參與列掃描，只供表上的按名讀寫用。
 		var tbl = new Table {
 			TypeInfoSrc = TestDictMapper.Inst.TypeInfoSrc,
 			DbTblName = TblName,

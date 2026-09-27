@@ -7,6 +7,7 @@ namespace Tsinswreng.CsSql.Test.Domains;
 public static class TestTblMgrIniter {
 	/// <summary>把所有測試表與聚合註冊進 mgr。DB 無關。</summary>
 	public static ITblMgr Init(ITblMgr mgr) {
+		// 本域實體型別交給反射來源，建表時據它掃出各表的列。
 		var mapper = TestDictMapper.Inst.TypeInfoSrc;
 
 		// ===== AllBasicTypes:無軟刪,覆蓋基礎類型映射 =====

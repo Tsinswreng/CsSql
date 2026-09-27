@@ -25,8 +25,10 @@ public partial class SqlRepo<
 
 	public ITblMgr TblMgr{get;set;}
 	public ISqlCmdMkr SqlCmdMkr{get;set;}
+	[Doc($@"型別元資料來源；實體與聚合的成員按名讀寫都經它")]
 	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
+	/// 倉儲：給表管理器、SQL 命令工廠，與型別元資料來源。
 	public SqlRepo(
 		ITblMgr TblMgr
 		,ISqlCmdMkr SqlCmdMkr
@@ -836,6 +838,7 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
+		// 聚合型別的元資料：下面要按名讀它的成員，故先確認來源認得它。
 		if(!TypeInfoSrc.TryGetInfo(typeof(TAgg), out var aggInfo) || aggInfo is null){
 			throw new Exception($"No {nameof(ITypeInfo)} for aggregate type: {typeof(TAgg)}");
 		}
@@ -935,6 +938,7 @@ Func<
 
 			TEntity? rootEnt = null;
 			var oneToOneSeen = new HashSet<Type>();
+			// 按成員序讀聚合實例的每個可讀成員，值裏挑出根實體與各 include。
 			foreach(var key in aggInfo.ReadableNames){
 				if(!TypeInfoSrc.TryGet(typeof(TAgg), aggObj, key, out var val) || val is null){
 					continue;
@@ -1216,6 +1220,7 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
+		// 聚合型別的元資料：下面要按名讀它的成員，故先確認來源認得它。
 		if(!TypeInfoSrc.TryGetInfo(typeof(TAgg), out var aggInfo) || aggInfo is null){
 			throw new Exception($"No {nameof(ITypeInfo)} for aggregate type: {typeof(TAgg)}");
 		}
@@ -1356,6 +1361,7 @@ Func<
 				var aggObj = (obj)agg;
 
 				TEntity? rootEnt = null;
+				// 按成員序讀聚合實例的每個可讀成員，值裏挑出根實體與各 include。
 				foreach(var key in aggInfo.ReadableNames){
 					if(!TypeInfoSrc.TryGet(typeof(TAgg), aggObj, key, out var val) || val is null){
 						continue;

@@ -37,6 +37,7 @@ internal class Program {
 				// 用 ITblMgr 類型持有:GetTbl 是接口默認方法(DIM),具體類上不可直接調用
 				ITblMgr TblMgr = new SqliteTblMgr();
 				TestTblMgrIniter.Init(TblMgr);
+				// 型別元資料來源：測試域的反射來源。
 				var Repo = new SqlRepo<TestKv, IdTestKv>(TblMgr, CmdMkr, TestDictMapper.Inst.TypeInfoSrc);
 				var Tbl = TblMgr.GetTbl<TestKv>();
 				// 建表(測試域所有表)

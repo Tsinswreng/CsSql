@@ -80,8 +80,10 @@ public static class ExtnITable {
 			return R;
 		}
 		
+		/// 由實體取主鍵值。查表用的是 `Entity` 的靜態型別，故不必另外傳型別。
 		public obj? GetEntityId<T>(T Entity){
-			if(z.TypeInfoSrc.TryGet(z.CodeEntityType, Entity, z.CodeIdName, out var Id)){
+			// 泛型重載：以 Entity 的靜態型別查表（與舊 Srefl 訪問器的泛型 TryGet 同義）。
+			if(z.TypeInfoSrc.TryGet(Entity, z.CodeIdName, out var Id)){
 				return Id;
 			}
 			throw new Exception($"{typeof(T)} does not have property {z.CodeIdName}");
@@ -199,6 +201,7 @@ public static class ExtnITable {
 			,obj Entity
 			,IStr_Any CodeDict
 		) {
+			// 型別要先在來源裏，否則下面按名寫沒有成員可寫。
 			if (!z.TypeInfoSrc.TryGetInfo(EntityType, out _)) {
 				throw new Exception($"No {nameof(ITypeInfo)} for type: {EntityType}");
 			}
@@ -220,6 +223,7 @@ public static class ExtnITable {
 			,Type? EntityType = null
 		) {
 			EntityType ??= Entity.GetType();
+			// 型別要先在來源裏，否則下面沒有成員名單可走。
 			if (!z.TypeInfoSrc.TryGetInfo(EntityType, out var Info) || Info is null) {
 				throw new Exception($"No {nameof(ITypeInfo)} for type: {EntityType}");
 			}

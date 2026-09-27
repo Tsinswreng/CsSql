@@ -20,6 +20,7 @@ public partial class Table:ITable{
 	public ITblMgr TblMgr{get;set;} = null!;
 	public IDbStuff DbStuff => TblMgr.DbStuff;
 
+	[Doc($@"型別元資料來源；實體成員的按名讀寫都經它")]
 	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
 	public Type CodeEntityType{get;set;}
@@ -27,6 +28,7 @@ public partial class Table:ITable{
 	#pragma warning disable CS8618
 	public Table(){}
 
+	/// 建表：給型別元資料來源、表名，與「代碼列名 → 上層型別」的表。
 	public Table(
 		ITypeInfoSrc TypeInfoSrc
 		,str Name
@@ -60,7 +62,16 @@ public partial class Table:ITable{
 	}
 
 
-	public static IDictionary<str, Type> GetKeyTypeDict(
+	[Doc($@"
+	#Sum[由型別元資料算出「代碼列名 → 上層型別」的表，供建表時初始化列用。]
+	#Params([TypeInfoSrc, 型別元資料來源], [EntityClrType, 實體型別])
+	#Rtn[代碼列名 → 上層型別；順序同該型別的成員序]
+	#Descr[
+	只收可讀成員：值要能從實體取出來，才談得上當一列。
+	型別不在來源裏時拋 Exception。
+	]
+	")]
+	public static IDictionary<str, Type> GetCodeCol_UpperType(
 		ITypeInfoSrc TypeInfoSrc
 		,Type EntityClrType
 	){
@@ -90,7 +101,7 @@ public partial class Table:ITable{
 		,str DbTblName
 	){
 		var EntityClrType = typeof(TEntity);
-		var Key_Type = GetKeyTypeDict(TypeInfoSrc, EntityClrType);
+		var Key_Type = GetCodeCol_UpperType(TypeInfoSrc, EntityClrType);
 		return Mk<TEntity>(EntityClrType, TypeInfoSrc, DbTblName, Key_Type);
 	}
 
@@ -116,7 +127,7 @@ public partial class Table:ITable{
 	[Obsolete("")]
 		public static Func<str, ITable<T>> FnMkTbl<T>(ITypeInfoSrc TypeInfoSrc){
  		ITable<T2> Mk<T2>(str DbTblName){
-				var TypeDict = GetKeyTypeDict(TypeInfoSrc, typeof(T2));
+				var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T2));
 			return Table.Mk<T2>(
 					TypeInfoSrc
 				,DbTblName
@@ -128,7 +139,7 @@ public partial class Table:ITable{
 	
 		public static Func<str, ITblSetter<T>> FnSetTbl<T>(ITypeInfoSrc TypeInfoSrc){
 		ITblSetter<T2> Set<T2>(str DbTblName){
-				var TypeDict = GetKeyTypeDict(TypeInfoSrc, typeof(T2));
+				var TypeDict = GetCodeCol_UpperType(TypeInfoSrc, typeof(T2));
 			var Tbl = Table.Mk<T2>(
 					TypeInfoSrc
 				,DbTblName

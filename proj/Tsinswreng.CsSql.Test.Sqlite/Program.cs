@@ -7,7 +7,7 @@ using Tsinswreng.CsSql.Sqlite.Di;
 using Tsinswreng.CsSql.Test;
 using Tsinswreng.CsSql.Test.Domains;
 using Tsinswreng.CsTreeTest;
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 
 namespace Tsinswreng.CsSql.Test.Sqlite;
 
@@ -45,7 +45,7 @@ internal class Program {
 		TestTblMgrIniter.Init(TblMgr);
 
 		SvcColct
-			.AddSingleton<IPropAccessorReg>(TestDictMapper.Inst)
+			.AddSingleton<ITypeInfoSrc>(TestDictMapper.Inst.TypeInfoSrc)
 			.AddCsSqlSqlite(new SqliteCfg {
 				Connection = conn
 				,TblMgr = TblMgr

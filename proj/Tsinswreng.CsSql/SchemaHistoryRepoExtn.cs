@@ -6,7 +6,7 @@ namespace Tsinswreng.CsSql;
 public static class ExtnSchemaHistoryRepo{
 	extension(IRepo<SchemaHistory, i64> z)
 	{
-		/// 將 `SchemaHistory` 倉儲的 `PropAccessorReg` 統一綁定到 `SqlHelperStrAcc`。
+		/// 將 `SchemaHistory` 倉儲的 `TypeInfoSrc` 統一綁定到 `CsSqlStrAcc` 的反射來源。
 		///
 		/// 原因：
 		/// - `SchemaHistory` 是 `CsSql` 內建輔助表
@@ -14,11 +14,11 @@ public static class ExtnSchemaHistoryRepo{
 		///
 		/// 若調用方註冊的不是 `SqlRepo<SchemaHistory, i64>`，直接拋異常，
 		/// 以便盡早暴露配置錯誤。
-		public IRepo<SchemaHistory, i64> UseCsSqlSrefl(){
+		public IRepo<SchemaHistory, i64> UseCsSqlTypeInfo(){
 			if(z is not SqlRepo<SchemaHistory, i64> SqlRepoSchemaHistory){
 				throw new ArgumentException("RepoSchemaHistory must be SqlRepo<SchemaHistory, i64>");
 			}
-			SqlRepoSchemaHistory.PropAccessorReg = CsSqlStrAcc.Inst;
+			SqlRepoSchemaHistory.TypeInfoSrc = CsSqlStrAcc.Inst.TypeInfoSrc;
 			return z;
 		}
 	}

@@ -27,14 +27,14 @@ public partial class TestTblCfg : ITester {
 
 	/// <summary>建一張 DbTblName 為 TblName 的 TestKv 表,掛上 DI 的 TblMgr 以獲得 SqlMkr。列由 Init 按實體屬性掃出。</summary>
 	ITable<TestKv> MkTbl(str TblName) {
-		var tbl = Table.Mk<TestKv>(TestDictMapper.Inst, TblName);
+		var tbl = Table.Mk<TestKv>(TestDictMapper.Inst.TypeInfoSrc, TblName);
 		tbl.TblMgr = TblMgr;
 		return tbl;
 	}
 
 	/// <summary>
 	/// 建一張手動裝列的表,完全控制列順序與列定義。
-	/// SqlMkTbl 只依賴 Columns 與 SqlMkr,不需要 PropAccessorReg 的實體列掃描;
+	/// SqlMkTbl 只依賴 Columns 與 SqlMkr,不需要 TypeInfoSrc 的實體列掃描;
 	/// 手動裝列使精確字符串斷言不依賴 accessor 的列枚舉順序。
 	/// </summary>
 	ITable MkRawTbl(
@@ -42,7 +42,7 @@ public partial class TestTblCfg : ITester {
 		,params (str Code, str DbName, Type? RawClrType, str DbType, bool NotNull, str[] AddSqls)[] Cols
 	) {
 		var tbl = new Table {
-			PropAccessorReg = TestDictMapper.Inst,
+			TypeInfoSrc = TestDictMapper.Inst.TypeInfoSrc,
 			DbTblName = TblName,
 			TblMgr = TblMgr,
 		};

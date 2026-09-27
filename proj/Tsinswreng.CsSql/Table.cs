@@ -4,7 +4,7 @@ namespace Tsinswreng.CsSql;
 using System.Linq.Expressions;
 using Tsinswreng.CsCore;
 using Tsinswreng.CsPage;
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 using Tsinswreng.CsTools;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
@@ -20,7 +20,7 @@ public partial class Table:ITable{
 	public ITblMgr TblMgr{get;set;} = null!;
 	public IDbStuff DbStuff => TblMgr.DbStuff;
 
-	public IPropAccessorReg PropAccessorReg{get;set;}
+	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
 	public Type CodeEntityType{get;set;}
 
@@ -28,11 +28,11 @@ public partial class Table:ITable{
 	public Table(){}
 
 	public Table(
-		IPropAccessorReg PropAccessorReg
+		ITypeInfoSrc TypeInfoSrc
 		,str Name
 		,IDictionary<str, Type> CodeCol_UpperType
 	){
-		this.PropAccessorReg = PropAccessorReg;
+		this.TypeInfoSrc = TypeInfoSrc;
 		this.DbTblName = Name;
 		this.CodeCol_UpperType = CodeCol_UpperType;
 	}
@@ -60,49 +60,49 @@ public partial class Table:ITable{
 	}
 
 
-	public static IDictionary<str, Type> GetTypeDictByAccessor(
-		IPropAccessorReg PropAccessorReg
+	public static IDictionary<str, Type> GetKeyTypeDict(
+		ITypeInfoSrc TypeInfoSrc
 		,Type EntityClrType
 	){
-		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(EntityClrType, out var Accessor)){
-			throw new Exception($"No {nameof(IPropAccessor)} registered for entity type: {EntityClrType}");
+		if(!TypeInfoSrc.TryGetInfo(EntityClrType, out var Info) || Info is null){
+			throw new Exception($"No {nameof(ITypeInfo)} for entity type: {EntityClrType}");
 		}
 		var Ans = new Dictionary<str, Type>();
-		foreach(var Key in Accessor.GetGetterNames(null)){
-			if(!Accessor.TryGetType(Key, out var Type) || Type is null){
+		foreach(var Key in Info.ReadableNames){
+			if(!Info.TryGetMember(Key, out var M)){
 				continue;
 			}
-			Ans[Key] = Type;
+			Ans[Key] = M.PropertyType;
 		}
 		return Ans;
 	}
 
 	public static ITable<TEntity> Mk<TEntity>(
-		IPropAccessorReg PropAccessorReg
+		ITypeInfoSrc TypeInfoSrc
 		,str DbTblName
 		,IDictionary<str, Type> Key_Type
 	){
-		return Mk<TEntity>(typeof(TEntity), PropAccessorReg, DbTblName, Key_Type);
+		return Mk<TEntity>(typeof(TEntity), TypeInfoSrc, DbTblName, Key_Type);
 	}
 
 	public static ITable<TEntity> Mk<TEntity>(
-		IPropAccessorReg PropAccessorReg
+		ITypeInfoSrc TypeInfoSrc
 		,str DbTblName
 	){
 		var EntityClrType = typeof(TEntity);
-		var Key_Type = GetTypeDictByAccessor(PropAccessorReg, EntityClrType);
-		return Mk<TEntity>(EntityClrType, PropAccessorReg, DbTblName, Key_Type);
+		var Key_Type = GetKeyTypeDict(TypeInfoSrc, EntityClrType);
+		return Mk<TEntity>(EntityClrType, TypeInfoSrc, DbTblName, Key_Type);
 	}
 
 
 	public static ITable<TEntity> Mk<TEntity>(
 		Type EntityClrType
-		,IPropAccessorReg PropAccessorReg
+		,ITypeInfoSrc TypeInfoSrc
 		,str DbTblName
 		,IDictionary<str, Type> Key_Type
 	){
 		var t = new Table<TEntity>{
-			PropAccessorReg = PropAccessorReg
+			TypeInfoSrc = TypeInfoSrc
 			,DbTblName = DbTblName
 			,CodeCol_UpperType = Key_Type
 			,CodeEntityType = EntityClrType
@@ -114,11 +114,11 @@ public partial class Table:ITable{
 	
 
 	[Obsolete("")]
-		public static Func<str, ITable<T>> FnMkTbl<T>(IPropAccessorReg PropAccessorReg){
+		public static Func<str, ITable<T>> FnMkTbl<T>(ITypeInfoSrc TypeInfoSrc){
  		ITable<T2> Mk<T2>(str DbTblName){
-				var TypeDict = GetTypeDictByAccessor(PropAccessorReg, typeof(T2));
+				var TypeDict = GetKeyTypeDict(TypeInfoSrc, typeof(T2));
 			return Table.Mk<T2>(
-					PropAccessorReg
+					TypeInfoSrc
 				,DbTblName
 				,TypeDict
 			);
@@ -126,11 +126,11 @@ public partial class Table:ITable{
 		return Mk<T>;
 	}
 	
-		public static Func<str, ITblSetter<T>> FnSetTbl<T>(IPropAccessorReg PropAccessorReg){
+		public static Func<str, ITblSetter<T>> FnSetTbl<T>(ITypeInfoSrc TypeInfoSrc){
 		ITblSetter<T2> Set<T2>(str DbTblName){
-				var TypeDict = GetTypeDictByAccessor(PropAccessorReg, typeof(T2));
+				var TypeDict = GetKeyTypeDict(TypeInfoSrc, typeof(T2));
 			var Tbl = Table.Mk<T2>(
-					PropAccessorReg
+					TypeInfoSrc
 				,DbTblName
 				,TypeDict
 			);

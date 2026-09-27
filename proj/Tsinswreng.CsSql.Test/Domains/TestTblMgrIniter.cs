@@ -7,7 +7,7 @@ namespace Tsinswreng.CsSql.Test.Domains;
 public static class TestTblMgrIniter {
 	/// <summary>把所有測試表與聚合註冊進 mgr。DB 無關。</summary>
 	public static ITblMgr Init(ITblMgr mgr) {
-		var mapper = TestDictMapper.Inst;
+		var mapper = TestDictMapper.Inst.TypeInfoSrc;
 
 		// ===== AllBasicTypes:無軟刪,覆蓋基礎類型映射 =====
 		var tbl = Table.FnSetTbl<PoAllBasicTypes>(mapper)("AllBasicTypes");

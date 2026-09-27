@@ -49,7 +49,7 @@ internal class Program {
 		// 用 ITblMgr 類型持有:GetTbl 是接口默認方法(DIM),具體類上不可直接調用
 		ITblMgr TblMgr = new PostgresTblMgr();
 		TestTblMgrIniter.Init(TblMgr);
-		var Repo = new SqlRepo<TestKv, IdTestKv>(TblMgr, CmdMkr, TestDictMapper.Inst);
+		var Repo = new SqlRepo<TestKv, IdTestKv>(TblMgr, CmdMkr, TestDictMapper.Inst.TypeInfoSrc);
 		var Tbl = TblMgr.GetTbl<TestKv>();
 		// 測試域 DDL 是 sqlite 語法,pg 用手寫建表(只建基準用到的 TestKv)
 		await ExecSchema(CmdMkr, PgCreateTestKvSql);

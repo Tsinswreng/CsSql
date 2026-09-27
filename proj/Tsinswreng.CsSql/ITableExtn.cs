@@ -3,7 +3,7 @@ namespace Tsinswreng.CsSql;
 using System.Linq.Expressions;
 using Tsinswreng.CsCore;
 using Tsinswreng.CsPage;
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 using Tsinswreng.CsTools;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
@@ -81,7 +81,7 @@ public static class ExtnITable {
 		}
 		
 		public obj? GetEntityId<T>(T Entity){
-			if(z.PropAccessorReg.TryGet(Entity, z.CodeIdName, out var Id)){
+			if(z.TypeInfoSrc.TryGet(z.CodeEntityType, Entity, z.CodeIdName, out var Id)){
 				return Id;
 			}
 			throw new Exception($"{typeof(T)} does not have property {z.CodeIdName}");
@@ -199,11 +199,11 @@ public static class ExtnITable {
 			,obj Entity
 			,IStr_Any CodeDict
 		) {
-			if (!z.PropAccessorReg.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
-				throw new Exception($"No {nameof(IPropAccessor)} registered for type: {EntityType}");
+			if (!z.TypeInfoSrc.TryGetInfo(EntityType, out _)) {
+				throw new Exception($"No {nameof(ITypeInfo)} for type: {EntityType}");
 			}
 			foreach (var (kCode, vCode) in CodeDict) {
-				if (!accessor.TrySet(Entity, kCode, vCode)) {
+				if (!z.TypeInfoSrc.TrySet(EntityType, Entity, kCode, vCode)) {
 					continue;
 				}
 			}
@@ -220,12 +220,12 @@ public static class ExtnITable {
 			,Type? EntityType = null
 		) {
 			EntityType ??= Entity.GetType();
-			if (!z.PropAccessorReg.Type_PropAccessor.TryGetValue(EntityType, out var accessor)) {
-				throw new Exception($"No {nameof(IPropAccessor)} registered for type: {EntityType}");
+			if (!z.TypeInfoSrc.TryGetInfo(EntityType, out var Info) || Info is null) {
+				throw new Exception($"No {nameof(ITypeInfo)} for type: {EntityType}");
 			}
 			var ans = new Str_Any();
-			foreach (var key in accessor.GetGetterNames(Entity)) {
-				if (!accessor.TryGet(Entity, key, out var vCode)) {
+			foreach (var key in Info.ReadableNames) {
+				if (!z.TypeInfoSrc.TryGet(EntityType, Entity, key, out var vCode)) {
 					continue;
 				}
 				ans[key] = vCode;

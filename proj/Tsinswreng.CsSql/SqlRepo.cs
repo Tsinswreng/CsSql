@@ -11,7 +11,7 @@ using System.Collections;
 using System.Diagnostics;
 using Str_Any = System.Collections.Generic.Dictionary<str, obj?>;
 using IStr_Any = System.Collections.Generic.IDictionary<str, obj?>;
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 
 //using T = Bo_Word;
 //TODO 拆分ⁿ使更通用化
@@ -25,14 +25,14 @@ public partial class SqlRepo<
 
 	public ITblMgr TblMgr{get;set;}
 	public ISqlCmdMkr SqlCmdMkr{get;set;}
-	public IPropAccessorReg PropAccessorReg{get;set;}
+	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
 	public SqlRepo(
 		ITblMgr TblMgr
 		,ISqlCmdMkr SqlCmdMkr
-		,IPropAccessorReg PropAccessorReg
+		,ITypeInfoSrc TypeInfoSrc
 	){
-		this.PropAccessorReg = PropAccessorReg;
+		this.TypeInfoSrc = TypeInfoSrc;
 		this.TblMgr = TblMgr;
 		this.SqlCmdMkr = SqlCmdMkr;
 	}
@@ -836,8 +836,8 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
-		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
-			throw new Exception($"No {nameof(IPropAccessor)} registered for aggregate type: {typeof(TAgg)}");
+		if(!TypeInfoSrc.TryGetInfo(typeof(TAgg), out var aggInfo) || aggInfo is null){
+			throw new Exception($"No {nameof(ITypeInfo)} for aggregate type: {typeof(TAgg)}");
 		}
 
 		var includeTypeInclude = new Dictionary<Type, IAggIncludeReg>();
@@ -935,8 +935,8 @@ Func<
 
 			TEntity? rootEnt = null;
 			var oneToOneSeen = new HashSet<Type>();
-			foreach(var key in aggAccessor.GetGetterNames(aggObj)){
-				if(!aggAccessor.TryGet(aggObj, key, out var val) || val is null){
+			foreach(var key in aggInfo.ReadableNames){
+				if(!TypeInfoSrc.TryGet(typeof(TAgg), aggObj, key, out var val) || val is null){
 					continue;
 				}
 
@@ -1216,8 +1216,8 @@ Func<
 		if(aggReg.RootIdType != typeof(TId)){
 			throw new Exception($"Agg root id type mismatch. Agg={typeof(TAgg)}, ExpectedId={typeof(TId)}, RegisteredId={aggReg.RootIdType}");
 		}
-		if(!PropAccessorReg.Type_PropAccessor.TryGetValue(typeof(TAgg), out var aggAccessor)){
-			throw new Exception($"No {nameof(IPropAccessor)} registered for aggregate type: {typeof(TAgg)}");
+		if(!TypeInfoSrc.TryGetInfo(typeof(TAgg), out var aggInfo) || aggInfo is null){
+			throw new Exception($"No {nameof(ITypeInfo)} for aggregate type: {typeof(TAgg)}");
 		}
 
 		var includeTypeInclude = new Dictionary<Type, IAggIncludeReg>();
@@ -1356,8 +1356,8 @@ Func<
 				var aggObj = (obj)agg;
 
 				TEntity? rootEnt = null;
-				foreach(var key in aggAccessor.GetGetterNames(aggObj)){
-					if(!aggAccessor.TryGet(aggObj, key, out var val) || val is null){
+				foreach(var key in aggInfo.ReadableNames){
+					if(!TypeInfoSrc.TryGet(typeof(TAgg), aggObj, key, out var val) || val is null){
 						continue;
 					}
 

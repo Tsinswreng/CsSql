@@ -1,5 +1,5 @@
 using System.Collections;
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 
 namespace Tsinswreng.CsSql;
 
@@ -16,8 +16,8 @@ public partial interface ITable{
 	public IDbStuff DbStuff => TblMgr.DbStuff;
 	public ISqlDialect SqlDialect=>DbStuff.SqlDialect;
 
-	[Doc($@"Accessor manager to read/write entity properties by string keys")]
-	public IPropAccessorReg PropAccessorReg{get;set;}
+	[Doc($@"Type info source; entity properties are read and written by name through it")]
+	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
 	[Doc($@"Entity type for this table")]
 	public Type CodeEntityType{get;set;}

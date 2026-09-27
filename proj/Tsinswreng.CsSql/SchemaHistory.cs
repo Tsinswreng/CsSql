@@ -1,6 +1,6 @@
 namespace Tsinswreng.CsSql;
 
-using Tsinswreng.Srefl;
+using Tsinswreng.CsRefl;
 
 
 /// 遷移表實體類
@@ -18,16 +18,17 @@ public partial class SchemaHistory{
 
 
 
-[SreflType(typeof(SchemaHistory))]
+/// `SchemaHistory` 的型別元資料來源：它是 CsSql 內建輔助表，用反射來源即可，不必登記。
 public partial class CsSqlStrAcc{
 	protected static CsSqlStrAcc? _Inst = null;
 	public static CsSqlStrAcc Inst => _Inst??= new CsSqlStrAcc();
+	public ITypeInfoSrc TypeInfoSrc{get;} = ReflTypeInfoSrc.Inst;
 }
 
 public partial class SchemaHistoryTblMkr{
 	public str TblName = "__TsinswrengSchemaHistory";
 	public ITable MkTbl(){
-		ITable R = Table.Mk<SchemaHistory>(CsSqlStrAcc.Inst, TblName);
+		ITable R = Table.Mk<SchemaHistory>(CsSqlStrAcc.Inst.TypeInfoSrc, TblName);
 		R.Col(nameof(SchemaHistory.Id)).AdditionalSqls(["PRIMARY KEY"]);
 		return R;
 	}

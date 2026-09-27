@@ -19,20 +19,14 @@
 	</ItemGroup>
 
 	<!-- <ItemGroup>
-		<ProjectReference Include="../../../Tsinswreng.Srefl/proj/Tsinswreng.Srefl.SrcGen/Tsinswreng.Srefl.SrcGen.csproj"
-			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
-		/>
-		<ProjectReference Include="../../../Tsinswreng.Srefl/proj/Tsinswreng.Srefl/Tsinswreng.Srefl.csproj" />
-	</ItemGroup> -->
-	<!-- <ItemGroup>
 		<ProjectReference Include="../../../Tsinswreng.CsDictMapper/proj/Tsinswreng.CsDictMapper.SrcGen/Tsinswreng.CsDictMapper.SrcGen.csproj"
 			OutputItemType="Analyzer" ReferenceOutputAssembly="false"
 		/>
 		<ProjectReference Include="../../../Tsinswreng.CsDictMapper/proj/Tsinswreng.CsDictMapper/Tsinswreng.CsDictMapper.csproj" />
 	</ItemGroup> -->
 	<ItemGroup>
-		<PackageReference Include="Tsinswreng.Srefl" Version="1.0.2-alpha" />
-		<PackageReference Include="Tsinswreng.Srefl.SrcGen" Version="1.0.5-alpha" />
+		<!-- 型別元資料門面：走本地依賴 -->
+		<ProjectReference Include="../../../Tsinswreng.CsRefl/proj/Tsinswreng.CsRefl/Tsinswreng.CsRefl.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<!-- <ProjectReference Include="../../../Tsinswreng.CsCore/proj/Tsinswreng.CsCore/Tsinswreng.CsCore.csproj" /> -->

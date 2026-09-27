@@ -228,7 +228,7 @@ public static class ExtnITable {
 				throw new Exception($"No {nameof(ITypeInfo)} for type: {EntityType}");
 			}
 			var ans = new Str_Any();
-			foreach (var key in Info.ReadableNames) {
+			foreach (var key in Info.ReadableMembers.Keys) {
 				if (!z.TypeInfoSrc.TryGet(EntityType, Entity, key, out var vCode)) {
 					continue;
 				}

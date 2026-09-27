@@ -79,7 +79,7 @@ public partial class Table:ITable{
 			throw new Exception($"No {nameof(ITypeInfo)} for entity type: {EntityClrType}");
 		}
 		var Ans = new Dictionary<str, Type>();
-		foreach(var Key in Info.ReadableNames){
+		foreach(var Key in Info.ReadableMembers.Keys){
 			if(!Info.TryGetMember(Key, out var M)){
 				continue;
 			}

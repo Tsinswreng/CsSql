@@ -56,15 +56,15 @@ public static class ITableExtn {
 			return z.SqlDialect.Quote(dbColName);
 		}
 
-		[Doc(@$"
+		[Doc($"""
 		#Example[fn<PoUser>(x=>x.UserName) returns string UserName]
 		")]
-		[Doc($@"
-		#Sum[Get member name from expression]
-		#Params([Expression to extract member name from])
+		[Doc($@"Get member name from expression
+		#TPrm{nameof(T)}[]
+		#Prm[{nameof(ExprMemb)}][Expression to extract member name from]
 		#Rtn[Member name as string]
-		#Example[fn<PoUser>(x=>x.UserName) returns string ""UserName""]
-		")]
+		#Example[fn<PoUser>(x=>x.UserName) returns string "UserName"]
+		""")]
 		public str Memb<T>(Expression<Func<T, obj?>> ExprMemb) {
 			return ToolExpr.GetMemberName(ExprMemb);
 		}

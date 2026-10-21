@@ -1,4 +1,4 @@
-﻿namespace Tsinswreng.CsSql;
+namespace Tsinswreng.CsSql;
 
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -1457,5 +1457,128 @@ Func<
 		}
 		await batch.End(Ct);
 		return new RespBatUpdAgg();
+	}
+
+	// ================================================================
+	// IList 批核心(補齊接口的另一半):函數邊界 = 批邊界,
+	// 傳多少元素就做多少,內部不切批;切批是調用方(流式版/SqlFlow)的職責。
+	// ================================================================
+
+	/// 把同步集合包成異步流,供已有流式核心複用(不改其分批策略)。
+	private static async IAsyncEnumerable<T> AsyE<T>(
+		IEnumerable<T> Src
+		,[EnumeratorCancellation] CT Ct = default
+	){
+		foreach(var one in Src){
+			yield return one;
+		}
+	}
+
+	/// IN 語義的 IList 批核心:一條 `IN` 查詢查完整批,無序、忽略不存在的 Id。
+	private async Task<IList<TEntity?>> GetInIdListCore(
+		IDbFnCtx Ctx, IList<TId> Ids, bool WithDel, CT Ct
+	){
+		if(Ids.Count == 0){
+			return [];
+		}
+		var Mk = T.SqlSplicer().Select("*").FromT()
+			.WhereIn(T.CodeIdName, Ids.Select(x=>(obj?)x).ToList());
+		if(!WithDel && T.SoftDelCol is not null){
+			Mk.And(T.SoftDelCol.FnSqlIsNonDel());
+		}
+		var Et = Mk.Build();
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Et.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		var Ans = new List<TEntity?>(Ids.Count);
+		await foreach(var Row in Cmd.RawArgs(Et.Args.ToDict()).AsyE1d(Ct).WithCancellation(Ct)){
+			Ans.Add(T.DbDictToEntity<TEntity>(Row));
+		}
+		return Ans;
+	}
+
+	public async Task<IList<TEntity?>> GetInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await GetInIdListCore(Ctx, Ids, false, Ct);
+	}
+
+	public async Task<IList<TEntity?>> GetInIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await GetInIdListCore(Ctx, Ids, true, Ct);
+	}
+
+	public async Task<IList<TEntity?>> OrdGetById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatGetByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public async Task<IList<bool>> OrdExistsById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatExistsByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public async Task<IList<bool>> OrdExistsByIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatExistsByIdCore(Ctx, Ids, true, Ct);
+	}
+
+	public async Task<IBatSoftDel> OrdSoftDelById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatSoftDelInCore(Ctx, Ids, Ct);
+		}
+		return new BatSoftDel();
+	}
+
+	public async Task<IBatHardDel> OrdHardDelById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatHardDelInCore(Ctx, Ids, Ct);
+		}
+		return new BatHardDel();
+	}
+
+	public async Task<IHardDelInId> HardDelInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatHardDelInCore(Ctx, Ids, Ct);
+		}
+		return new HardDelInId();
+	}
+
+	public async Task<IList<TAgg?>> OrdGetAggById<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	)where TAgg: class{
+		return await HandleOneBatch<TAgg>(Ctx, false, Ids, Ct);
+	}
+
+	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, false, Ct);
+		}
+		return new RespHardDelAggInId();
+	}
+
+	// 聚合更新需要逐個聚合比對子表現狀,故 IList 版仍走既有的流式核心;
+	// 批大小由核心自己按庫策略決定,這裡只把 List 包成流。
+	public async Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
+	){
+		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), false, Ct);
+	}
+
+	public async Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
+	){
+		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), true, Ct);
 	}
 }

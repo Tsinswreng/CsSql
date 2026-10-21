@@ -24,7 +24,9 @@ public partial class SqlRepo<
 {
 
 	public ITblMgr TblMgr{get;set;}
+
 	public ISqlCmdMkr SqlCmdMkr{get;set;}
+
 	[Doc($@"型別元資料來源；實體與聚合的成員按名讀寫都經它")]
 	public ITypeInfoSrc TypeInfoSrc{get;set;}
 
@@ -40,6 +42,560 @@ public partial class SqlRepo<
 	}
 
 	public ITable<TEntity> T => TblMgr.GetTbl<TEntity>();
+
+	#region 讀·按 Id
+
+	public IAsyncEnumerable<TEntity?> GetInId(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return GetManyInIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public async Task<IList<TEntity?>> GetInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await GetInIdListCore(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> GetInIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return GetManyInIdCore(Ctx, Ids, true, Ct);
+	}
+
+	public async Task<IList<TEntity?>> GetInIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await GetInIdListCore(Ctx, Ids, true, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity?> OrdGetById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		// 流式入口：批原語(IN 段批大小)切塊 → IList 批核心（Build+Get1d 位置對齊）
+		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
+			return await BatGetByIdCore(Ctx, BatIds, false, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+	}
+
+	public async Task<IList<TEntity?>> OrdGetById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatGetByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	// ■ 流式版 OrdGetByIdWithDel:批原語(IN 段批大小)把來源流切塊,逐塊調 IList 版;
+	// 出參流與入參流位置一一對應(每個回調內部保持 Ord 補 null 語義,批與批之間保持批序)。
+	public IAsyncEnumerable<TEntity?> OrdGetByIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
+			return await OrdGetByIdWithDel(Ctx, BatIds, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+	}
+
+	// ■ 批一級形狀(IList 版 OrdGetByIdWithDel,含軟刪):整個 List 一次等值批量查回,位置對齊。
+	// 函數邊界 = 批邊界:傳多大的 List 就查多大的批(參數規模的兜底分段由執行層負責);
+	// 語義承諾:出參與入參一一對應、重複 Id 出重複實體、查無補 null、空列表直接返回空。
+	public async Task<IList<TEntity?>> OrdGetByIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatGetByIdCore(Ctx, Ids, true, Ct);
+	}
+
+	// 流式存在查:批原語(IN 段批大小)切塊 → IList 批核心(位置對齊 bool 流)。
+	public IAsyncEnumerable<bool> OrdExistsById(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
+			return await BatExistsByIdCore(Ctx, BatIds, false, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+	}
+
+	public async Task<IList<bool>> OrdExistsById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatExistsByIdCore(Ctx, Ids, false, Ct);
+	}
+
+	public IAsyncEnumerable<bool> OrdExistsByIdWithDel(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	){
+		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
+			return await BatExistsByIdCore(Ctx, BatIds, true, Ct2);
+		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+	}
+
+	public async Task<IList<bool>> OrdExistsByIdWithDel(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		return await BatExistsByIdCore(Ctx, Ids, true, Ct);
+	}
+
+	#endregion 讀·按 Id
+
+	#region 讀·全表
+
+	public IAsyncEnumerable<TEntity> GetAll(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllCore(Ctx, false, Ct);
+	}
+
+	public IAsyncEnumerable<TEntity> GetAllWithDel(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllCore(Ctx, true, Ct);
+	}
+
+	#endregion 讀·全表
+
+	#region 寫·實體
+
+	// ■ 流式版 OrdAdd:批原語(批大小 = 庫默認 sqlite 1 / pg 500)把來源流切塊,
+	// 逐塊交給批內核心(Hence 每個事務內等價於原 BatchCollector 行為:sqlite 一單元一寫、pg 一單元 500 寫)。
+	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new RespBatInsert();
+	}
+
+	// ■ 批一級形狀(IList 版 OrdAdd):函數邊界 = 批邊界——把傳進來的整個 List 一次同構批量寫完。
+	// 語義承諾:返回 = 本批全部生效(約束衝突直接拋);空列表視為無操作、返回成功。
+	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+		if(Ents.Count > 0){
+			await BatOrdAddCore(Ctx, Ents, Ct);
+		}
+		return new RespBatInsert();
+	}
+
+	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
+		if(fieldsToUpdate.Count == 0){
+			return new RespUpd();
+		}
+		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatUpdCore(Ctx, BatEnts, fieldsToUpdate, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new RespUpd();
+	}
+
+	// ■ IList 版 OrdUpd:函數只管一批——整批一次同構 UPDATE(批大小/切批是調用方/原語的職責)。
+	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
+		if(fieldsToUpdate.Count == 0 || Ents.Count == 0){
+			return new RespUpd();
+		}
+		await BatUpdCore(Ctx, Ents, fieldsToUpdate, Ct);
+		return new RespUpd();
+	}
+
+	public async Task<IRespBatUpsert> OrdUpsert(
+		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
+	){
+		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
+		// 批大小用寫入策略;存在判定用等值批量查(位置對齊),不重發 IN。
+		await SqlFlow.BatchesInOnly<TEntity>(Ents, (EntList, Ct2)=> BatOrdUpsertCore(Ctx, EntList, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new RespBatUpsert();
+	}
+
+	// ■ IList 版 OrdUpsert:函數只管一批——整批一次完成(批大小/切批是調用方/原語的職責)。
+	public async Task<IRespBatUpsert> OrdUpsert(
+		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
+	){
+		if(Ents.Count > 0){
+			await BatOrdUpsertCore(Ctx, Ents, Ct);
+		}
+		return new RespBatUpsert();
+	}
+
+	// ■ 批一級形狀(IList 版 OrdUpdByDbDict):Ids 與 Dicts 成對,整批一次 UPDATE 寫完。
+	// 語義承諾:
+	// - Ids 與 Dicts 長度不等即拋 ArgumentException(不執行任何 UPDATE);
+	// - 支持異構字典:每對 Dict 的鍵集可不同,各行按自己有的列更新(詳見 BatOrdUpdByDbDictCore 頭註);
+	// - 批大小/切批不在此層(交由原語/調用方)。
+	public async Task<IRespBatUpd> OrdUpdByDbDict(
+		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
+	){
+		// 入參一致性校驗:兩列表必須逐位對應,否則拒絕執行
+		if(Ids.Count != Dicts.Count){
+			throw new ArgumentException("Dicts count must equal to Ids count");
+		}
+
+		// 成對組裝後交給批內核心(逐對拼 SQL 的細節在核心內)
+		var Pairs = new List<(IStr_Any Dict, TId Id)>(Ids.Count);
+		for(i32 i = 0; i < Ids.Count; i++){
+			Pairs.Add((Dicts[i], Ids[i]));
+		}
+		if(Pairs.Count > 0){
+			await BatOrdUpdByDbDictCore(Ctx, Pairs, Ct);
+		}
+		return new RespUpd();
+	}
+
+	// ■ 流式版 OrdUpdByDbDict:兩條來源流先按位 zip 成對(長度不等即拋,防錯位),
+	// 再交給批原語切塊、逐塊調批內核心——雙流成對的語義在 zip 層保證,原語只管切批。
+	public async Task<IRespBatUpd> OrdUpdByDbDict(
+		IDbFnCtx Ctx
+		,IAsyncEnumerable<TId> Ids
+		,IAsyncEnumerable<IStr_Any> Dicts
+		,CT Ct
+	){
+		await using var DictEtor = Dicts.GetAsyncEnumerator(Ct);
+		await using var IdEtor = Ids.GetAsyncEnumerator(Ct);
+
+		// 惰性 zip:每次同時推進兩個枚舉器,任一流先結束即視為長度不等、拋錯
+		async IAsyncEnumerable<(IStr_Any Dict, TId Id)> Zip(){
+			while(true){
+				var HasDict = await DictEtor.MoveNextAsync();
+				var HasId = await IdEtor.MoveNextAsync();
+				if(HasDict != HasId){
+					throw new ArgumentException("Dicts count must equal to Ids count");
+				}
+				if(!HasDict){
+					break;
+				}
+				yield return (DictEtor.Current, IdEtor.Current);
+			}
+		}
+
+		await SqlFlow.BatchesInOnly(Zip(), (Items, Ct2)=> BatOrdUpdByDbDictCore(Ctx, Items, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new RespUpd();
+	}
+
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
+		IDbFnCtx Ctx
+		,IAsyncEnumerable<TId> Ids
+		,IAsyncEnumerable<IStr_Any> Dicts
+		,CT Ct
+	){
+		var DbDicts = Dicts.Select(x=>T.ToDbDict(x));
+		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
+	}
+
+	// ■ IList 版 OrdUpdByCodeDict:Ids 與 CodeDicts 成對、整批一次異構 UPDATE(複用 IList 版 OrdUpdByDbDict)。
+	public Task<IRespBatUpd> OrdUpdByCodeDict(
+		IDbFnCtx Ctx
+		,IList<TId> Ids
+		,IList<IStr_Any> CodeDicts
+		,CT Ct
+	){
+		var DbDicts = CodeDicts.Select(x=>T.ToDbDict(x)).ToList();
+		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
+	}
+
+	#endregion 寫·實體
+
+	#region 刪
+
+	public async Task<IBatSoftDel> OrdSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+		if(T.SoftDelCol is null){
+			throw new Exception("SoftDeleteCol is null");
+		}
+		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new BatSoftDel();
+	}
+
+	public async Task<IBatSoftDel> OrdSoftDelById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatSoftDelInCore(Ctx, Ids, Ct);
+		}
+		return new BatSoftDel();
+	}
+
+	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		return new BatHardDel();
+	}
+
+	public async Task<IBatHardDel> OrdHardDelById(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatHardDelInCore(Ctx, Ids, Ct);
+		}
+		return new BatHardDel();
+	}
+
+	public async Task<ISoftDelInId> SoftDelInId(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
+	){
+		if(T.SoftDelCol is null){
+			throw new Exception("SoftDeleteCol is null");
+		}
+		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return new SoftDelInId();
+	}
+
+	// ■ IList 版 SoftDelInId:函數只管一批——整批一次 IN 軟刪(批大小/切批是調用方/原語的職責)。
+	public async Task<ISoftDelInId> SoftDelInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatSoftDelInCore(Ctx, Ids, Ct);
+		}
+		return new SoftDelInId();
+	}
+
+	public async Task<IHardDelInId> HardDelInId(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
+	){
+		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return new HardDelInId();
+	}
+
+	public async Task<IHardDelInId> HardDelInId(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatHardDelInCore(Ctx, Ids, Ct);
+		}
+		return new HardDelInId();
+	}
+
+	#endregion 刪
+
+	#region 聚合
+
+	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
+		await SqlFlow.BatchesInOnly(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct, batchSize);
+		return new RespBatAddAgg();
+	}
+
+	// ■ IList 版 OrdAddAgg:函數只管一批——整批聚合級聯插入一次完成。
+	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
+		if(Aggs.Count > 0){
+			await BatOrdAddAggCore<TAgg>(Ctx, Aggs, Ct);
+		}
+		return new RespBatAddAgg();
+	}
+
+	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllAggCore<TAgg>(Ctx, false, Ct);
+	}
+
+	public IAsyncEnumerable<TAgg> GetAllAggWithDel<TAgg>(
+		IDbFnCtx Ctx, CT Ct
+	){
+		return GetAllAggCore<TAgg>(Ctx, true, Ct);
+	}
+
+	public IAsyncEnumerable<TAgg?> OrdGetAggById<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)
+		where TAgg: class
+	{
+		return BatGetAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
+	}
+
+	public async Task<IList<TAgg?>> OrdGetAggById<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	)where TAgg: class{
+		return await HandleOneBatch<TAgg>(Ctx, false, Ids, Ct);
+	}
+
+	// 流式版 OrdGetAggByIdWithDel:經 BatGetAggByIdCore(Batches 原語切批)逐批完成聚合查。
+	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
+		,CT Ct
+	)
+		where TAgg: class
+	{
+		return BatGetAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
+	}
+
+	// ■ 批一級形狀(IList 版 OrdGetAggByIdWithDel):交給「一批聚合查核心」整批一次完成(含軟刪)。
+	// 函數邊界 = 批邊界:內部零分批,傳多大的 List 就做多大的聚合查(IN 段規模由核心/執行層兜底)。
+	// 語義:位置一一對應、查無補 null(見 HandleOneBatch 的三步與 step 3 的組裝規則)。
+	public async Task<IList<TAgg?>> OrdGetAggByIdWithDel<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	)
+		where TAgg: class
+	{
+		return await HandleOneBatch<TAgg>(Ctx, true, Ids, Ct);
+	}
+
+	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
+	){
+		return BatUpdAggCore(Ctx, Agg, false, Ct);
+	}
+
+	// 聚合更新需要逐個聚合比對子表現狀,故 IList 版仍走既有的流式核心;
+	// 批大小由核心自己按庫策略決定,這裡只把 List 包成流。
+	public async Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
+	){
+		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), false, Ct);
+	}
+
+	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
+	){
+		return BatUpdAggCore(Ctx, Agg, true, Ct);
+	}
+
+	public async Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
+	){
+		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), true, Ct);
+	}
+
+	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		await BatDelAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
+		return new RespHardDelAggInId();
+	}
+
+	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
+		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
+	){
+		if(Ids.Count > 0){
+			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, false, Ct);
+		}
+		return new RespHardDelAggInId();
+	}
+
+	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
+		return new RespSoftDelAggInId();
+	}
+
+	// ■ IList 版:函數只管一批——整批聚合級聯軟刪一次完成(IN 語義)。
+	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IList<TId> Ids, CT Ct) {
+		if(Ids.Count > 0){
+			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, true, Ct);
+		}
+		return new RespSoftDelAggInId();
+	}
+
+	#endregion 聚合
+
+	#region Include
+
+	public delegate Task<IDictionary<TKey, IList<TPo>>> TFnIncludeEntitysByKeys<TKey, TPo>(
+		ITable Tbl, Func<TPo, TKey> FnMemb, IEnumerable<TKey?> Keys, CT Ct
+	);
+
+/*
+Func<
+		ITable, Func<TPo, TKey>, IEnumerable<TKey>
+		,CT, Task<IDictionary<TKey, IList<TPo>>>
+	>
+ */
+
+	public async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey?> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable Tbl
+		,CT Ct
+	)where TPo: new(){
+		return await IncludeEntitysByKeysCore(
+			Ctx,
+			CodeCol,
+			OptQry,
+			Keys,
+			FnMemb,
+			Tbl,
+			Ct
+		);
+	}
+
+	public async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey?> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable<TPo> Tbl
+		,CT Ct
+	)where TPo: new(){
+		return await IncludeEntitysByKeysCore(
+			Ctx,
+			CodeCol,
+			OptQry,
+			Keys,
+			FnMemb,
+			Tbl,
+			Ct
+		);
+	}
+
+	protected async Task<TFnIncludeEntitysByKeys<TKey, TPo>> FnIncludeEntitysByKeys<TPo, TKey>(
+		IDbFnCtx Ctx
+		,ITable Tbl
+		,str CodeCol
+		,OptQry? OptQry
+		,CT Ct
+	)where TPo: new(){
+		var WithDel = OptQry?.IncludeDeleted ?? false;
+		var fn = await FnScltAggIncludeByColInVals<TKey>(
+			Ctx,
+			Tbl,
+			CodeCol,
+			OptQry,
+			WithDel,
+			Ct
+		);
+		return async(Tbl, Memb, Keys, Ct)=>{
+			IList<TKey> KeyList = Keys.Where(x=>x is not null).ToList()!;
+			var poPage = fn(KeyList, Ct);
+			var dicts = await poPage.ToListAsync(Ct);
+			var pos = dicts
+				.Where(x=>x is not null)
+				.Select(x=>Tbl.DbDictToEntity<TPo>(x!));
+			IDictionary<TKey, IList<TPo>> posByKey = pos.GroupBy(Memb).ToDictionary(g=>g.Key, g=>(IList<TPo>)g.ToList());
+			return posByKey;
+		};
+	}
+
+	/// 執行兩個 IncludeEntitysByKeys overload 的共用流程。
+	/// 呼叫者只需提供 key；查詢參數數量由實際的非 null key 數自動決定。
+	private async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeysCore<TPo, TKey>(
+		IDbFnCtx Ctx
+		,str CodeCol
+		,OptQry? OptQry
+		,IEnumerable<TKey?> Keys
+		,Func<TPo, TKey> FnMemb
+		,ITable Tbl
+		,CT Ct
+	)where TPo: new(){
+		// 先過濾並固定輸入，避免可迭代集合被多次消費，也讓 SQL 參數數量準確匹配。
+		IList<TKey> KeyList = Keys.Where(X=>X is not null).ToList()!;
+		if(KeyList.Count == 0){
+			return new Dictionary<TKey, IList<TPo>>();
+		}
+
+		// record copy 保留 IncludeDeleted 等選項，只覆蓋由本函數負責推導的參數數量。
+		var EffectiveOptQry = (OptQry ?? new OptQry()) with{
+			InParamCnt = (u64)KeyList.Count,
+		};
+		var Fn = await FnIncludeEntitysByKeys<TPo, TKey>(
+			Ctx,
+			Tbl,
+			CodeCol,
+			EffectiveOptQry,
+			Ct
+		);
+		return await Fn(Tbl, FnMemb, KeyList, Ct);
+	}
+
+		// ■ 批內核心(一批 = 一次同構批量 INSERT):吃 IList,SQL 走 SqlSplicer 語句部——
+
+	#endregion Include
+
+	#region 批核心(私有)
 
 	private IAsyncEnumerable<TEntity?> GetManyInIdCore(//TODO寫法不對
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
@@ -66,6 +622,28 @@ public partial class SqlRepo<
 			}
 			return Ans;
 		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+	}
+
+	/// IN 語義的 IList 批核心:一條 `IN` 查詢查完整批,無序、忽略不存在的 Id。
+	private async Task<IList<TEntity?>> GetInIdListCore(
+		IDbFnCtx Ctx, IList<TId> Ids, bool WithDel, CT Ct
+	){
+		if(Ids.Count == 0){
+			return [];
+		}
+		var Mk = T.SqlSplicer().Select("*").FromT()
+			.WhereIn(T.CodeIdName, Ids.Select(x=>(obj?)x).ToList());
+		if(!WithDel && T.SoftDelCol is not null){
+			Mk.And(T.SoftDelCol.FnSqlIsNonDel());
+		}
+		var Et = Mk.Build();
+		var Cmd = await SqlCmdMkr.Prepare(Ctx, Et.Sql, Ct);
+		Ctx.AddToDispose(Cmd);
+		var Ans = new List<TEntity?>(Ids.Count);
+		await foreach(var Row in Cmd.RawArgs(Et.Args.ToDict()).AsyE1d(Ct).WithCancellation(Ct)){
+			Ans.Add(T.DbDictToEntity<TEntity>(Row));
+		}
+		return Ans;
 	}
 
 	private async Task<IList<TEntity?>> BatGetByIdCore(
@@ -239,6 +817,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 // 語義承諾:按入參 OrderedBatchIds 位置對齊組裝聚合(查無補 null、重複 Id 出重複聚合);
 // 本方法只負責「這一批怎麼查齊並組裝」,不負責把流切批——切批由調用方(Batches 原語)決定。
 // 由原 BatGetAggByIdCore 的閉包 HandleOneBatch 提升而來(樣板 ④),行為不變。
+
 	private async Task<IList<TAgg?>> HandleOneBatch<TAgg>(
 		IDbFnCtx Ctx
 		,bool WithDel
@@ -342,232 +921,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 			return await HandleOneBatch<TAgg>(Ctx, WithDel, BatIds, Ct2);
 		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
 	}
-	
-	public IAsyncEnumerable<TEntity?> GetInId(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		return GetManyInIdCore(Ctx, Ids, false, Ct);
-	}
 
-	public IAsyncEnumerable<TEntity?> GetInIdWithDel(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		return GetManyInIdCore(Ctx, Ids, true, Ct);
-	}
-
-	public IAsyncEnumerable<TEntity?> GetManyInIds(
-		IDbFnCtx Ctx, IEnumerable<TId> Ids
-		,CT Ct
-	){
-		async IAsyncEnumerable<TId> ToAsyE(){
-			foreach(var id in Ids){
-				yield return id;
-			}
-		}
-		return GetManyInIdCore(Ctx, ToAsyE(), false, Ct);
-	}
-
-	public IAsyncEnumerable<TEntity?> OrdGetById(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		// 流式入口：批原語(IN 段批大小)切塊 → IList 批核心（Build+Get1d 位置對齊）
-		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
-			return await BatGetByIdCore(Ctx, BatIds, false, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-	}
-
-	// ■ 批一級形狀(IList 版 OrdGetByIdWithDel,含軟刪):整個 List 一次等值批量查回,位置對齊。
-	// 函數邊界 = 批邊界:傳多大的 List 就查多大的批(參數規模的兜底分段由執行層負責);
-	// 語義承諾:出參與入參一一對應、重複 Id 出重複實體、查無補 null、空列表直接返回空。
-	public async Task<IList<TEntity?>> OrdGetByIdWithDel(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await BatGetByIdCore(Ctx, Ids, true, Ct);
-	}
-
-	// ■ 流式版 OrdGetByIdWithDel:批原語(IN 段批大小)把來源流切塊,逐塊調 IList 版;
-	// 出參流與入參流位置一一對應(每個回調內部保持 Ord 補 null 語義,批與批之間保持批序)。
-	public IAsyncEnumerable<TEntity?> OrdGetByIdWithDel(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
-			return await OrdGetByIdWithDel(Ctx, BatIds, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-	}
-
-	public IAsyncEnumerable<TEntity> GetAll(
-		IDbFnCtx Ctx, CT Ct
-	){
-		return GetAllCore(Ctx, false, Ct);
-	}
-
-	public IAsyncEnumerable<TEntity> GetAllWithDel(
-		IDbFnCtx Ctx, CT Ct
-	){
-		return GetAllCore(Ctx, true, Ct);
-	}
-	
-	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
-		IDbFnCtx Ctx, CT Ct
-	){
-		return GetAllAggCore<TAgg>(Ctx, false, Ct);
-	}
-
-	public IAsyncEnumerable<TAgg> GetAllAggWithDel<TAgg>(
-		IDbFnCtx Ctx, CT Ct
-	){
-		return GetAllAggCore<TAgg>(Ctx, true, Ct);
-	}
-
-	public IAsyncEnumerable<TAgg?> OrdGetAggById<TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	)
-		where TAgg: class
-	{
-		return BatGetAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
-	}
-
-	// ■ 批一級形狀(IList 版 OrdGetAggByIdWithDel):交給「一批聚合查核心」整批一次完成(含軟刪)。
-	// 函數邊界 = 批邊界:內部零分批,傳多大的 List 就做多大的聚合查(IN 段規模由核心/執行層兜底)。
-	// 語義:位置一一對應、查無補 null(見 HandleOneBatch 的三步與 step 3 的組裝規則)。
-	public async Task<IList<TAgg?>> OrdGetAggByIdWithDel<TAgg>(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	)
-		where TAgg: class
-	{
-		return await HandleOneBatch<TAgg>(Ctx, true, Ids, Ct);
-	}
-
-	// 流式版 OrdGetAggByIdWithDel:經 BatGetAggByIdCore(Batches 原語切批)逐批完成聚合查。
-	public IAsyncEnumerable<TAgg?> OrdGetAggByIdWithDel<TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	)
-		where TAgg: class
-	{
-		return BatGetAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
-	}
-
-
-
-
-	
-
-	public delegate Task<IDictionary<TKey, IList<TPo>>> TFnIncludeEntitysByKeys<TKey, TPo>(
-		ITable Tbl, Func<TPo, TKey> FnMemb, IEnumerable<TKey?> Keys, CT Ct
-	);
-
-/*
-Func<
-		ITable, Func<TPo, TKey>, IEnumerable<TKey>
-		,CT, Task<IDictionary<TKey, IList<TPo>>>
-	>
- */
-	protected async Task<TFnIncludeEntitysByKeys<TKey, TPo>> FnIncludeEntitysByKeys<TPo, TKey>(
-		IDbFnCtx Ctx
-		,ITable Tbl
-		,str CodeCol
-		,OptQry? OptQry
-		,CT Ct
-	)where TPo: new(){
-		var WithDel = OptQry?.IncludeDeleted ?? false;
-		var fn = await FnScltAggIncludeByColInVals<TKey>(
-			Ctx,
-			Tbl,
-			CodeCol,
-			OptQry,
-			WithDel,
-			Ct
-		);
-		return async(Tbl, Memb, Keys, Ct)=>{
-			IList<TKey> KeyList = Keys.Where(x=>x is not null).ToList()!;
-			var poPage = fn(KeyList, Ct);
-			var dicts = await poPage.ToListAsync(Ct);
-			var pos = dicts
-				.Where(x=>x is not null)
-				.Select(x=>Tbl.DbDictToEntity<TPo>(x!));
-			IDictionary<TKey, IList<TPo>> posByKey = pos.GroupBy(Memb).ToDictionary(g=>g.Key, g=>(IList<TPo>)g.ToList());
-			return posByKey;
-		};
-	}
-
-	public async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
-		IDbFnCtx Ctx
-		,str CodeCol
-		,OptQry? OptQry
-		,IEnumerable<TKey?> Keys
-		,Func<TPo, TKey> FnMemb
-		,ITable Tbl
-		,CT Ct
-	)where TPo: new(){
-		return await IncludeEntitysByKeysCore(
-			Ctx,
-			CodeCol,
-			OptQry,
-			Keys,
-			FnMemb,
-			Tbl,
-			Ct
-		);
-	}
-
-	public async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeys<TPo, TKey>(
-		IDbFnCtx Ctx
-		,str CodeCol
-		,OptQry? OptQry
-		,IEnumerable<TKey?> Keys
-		,Func<TPo, TKey> FnMemb
-		,ITable<TPo> Tbl
-		,CT Ct
-	)where TPo: new(){
-		return await IncludeEntitysByKeysCore(
-			Ctx,
-			CodeCol,
-			OptQry,
-			Keys,
-			FnMemb,
-			Tbl,
-			Ct
-		);
-	}
-
-	/// 執行兩個 IncludeEntitysByKeys overload 的共用流程。
-	/// 呼叫者只需提供 key；查詢參數數量由實際的非 null key 數自動決定。
-	private async Task<IDictionary<TKey, IList<TPo>>> IncludeEntitysByKeysCore<TPo, TKey>(
-		IDbFnCtx Ctx
-		,str CodeCol
-		,OptQry? OptQry
-		,IEnumerable<TKey?> Keys
-		,Func<TPo, TKey> FnMemb
-		,ITable Tbl
-		,CT Ct
-	)where TPo: new(){
-		// 先過濾並固定輸入，避免可迭代集合被多次消費，也讓 SQL 參數數量準確匹配。
-		IList<TKey> KeyList = Keys.Where(X=>X is not null).ToList()!;
-		if(KeyList.Count == 0){
-			return new Dictionary<TKey, IList<TPo>>();
-		}
-
-		// record copy 保留 IncludeDeleted 等選項，只覆蓋由本函數負責推導的參數數量。
-		var EffectiveOptQry = (OptQry ?? new OptQry()) with{
-			InParamCnt = (u64)KeyList.Count,
-		};
-		var Fn = await FnIncludeEntitysByKeys<TPo, TKey>(
-			Ctx,
-			Tbl,
-			CodeCol,
-			EffectiveOptQry,
-			Ct
-		);
-		return await Fn(Tbl, FnMemb, KeyList, Ct);
-	}
-
-		// ■ 批內核心(一批 = 一次同構批量 INSERT):吃 IList,SQL 走 SqlSplicer 語句部——
 	// InsertIntoT() 拼 `INSERT INTO t`、Vals 語句部拼 `(列...) VALUES (@列...)` 並為每列註冊 Many binder
 	// (值序列 = 整批該列值),Build 按公共長度展開 N 份、參數對序後綴全程唯一,執行端一句 Run 落庫。
 	// 「一批」的粒度:進來的 List 有多長就拼多長、一次寫完;批大小/切批是調用方(原語)的職責。
@@ -581,23 +935,6 @@ Func<
 
 		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
-	}
-
-
-	// ■ 批一級形狀(IList 版 OrdAdd):函數邊界 = 批邊界——把傳進來的整個 List 一次同構批量寫完。
-	// 語義承諾:返回 = 本批全部生效(約束衝突直接拋);空列表視為無操作、返回成功。
-	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
-		if(Ents.Count > 0){
-			await BatOrdAddCore(Ctx, Ents, Ct);
-		}
-		return new RespBatInsert();
-	}
-
-	// ■ 流式版 OrdAdd:批原語(批大小 = 庫默認 sqlite 1 / pg 500)把來源流切塊,
-	// 逐塊交給批內核心(Hence 每個事務內等價於原 BatchCollector 行為:sqlite 一單元一寫、pg 一單元 500 寫)。
-	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
-		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new RespBatInsert();
 	}
 
 	// ■ 同構批量 UPDATE 批核心(吃 IList 一批):UpdateT() 拼 `UPDATE t`、Set 語句部拼 `SET a=@a, b=@b`
@@ -617,25 +954,6 @@ Func<
 
 		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
-	}
-
-	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
-		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
-		if(fieldsToUpdate.Count == 0){
-			return new RespUpd();
-		}
-		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatUpdCore(Ctx, BatEnts, fieldsToUpdate, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new RespUpd();
-	}
-
-	// ■ IList 版 OrdUpd:函數只管一批——整批一次同構 UPDATE(批大小/切批是調用方/原語的職責)。
-	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
-		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
-		if(fieldsToUpdate.Count == 0 || Ents.Count == 0){
-			return new RespUpd();
-		}
-		await BatUpdCore(Ctx, Ents, fieldsToUpdate, Ct);
-		return new RespUpd();
 	}
 
 	// ■ 批內核心(一批 Update by Db Dict):吃 IList,SQL 走 SqlSplicer 語句部——
@@ -659,81 +977,6 @@ Func<
 		return NIL;
 	}
 
-	// ■ 批一級形狀(IList 版 OrdUpdByDbDict):Ids 與 Dicts 成對,整批一次 UPDATE 寫完。
-	// 語義承諾:
-	// - Ids 與 Dicts 長度不等即拋 ArgumentException(不執行任何 UPDATE);
-	// - 支持異構字典:每對 Dict 的鍵集可不同,各行按自己有的列更新(詳見 BatOrdUpdByDbDictCore 頭註);
-	// - 批大小/切批不在此層(交由原語/調用方)。
-	public async Task<IRespBatUpd> OrdUpdByDbDict(
-		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
-	){
-		// 入參一致性校驗:兩列表必須逐位對應,否則拒絕執行
-		if(Ids.Count != Dicts.Count){
-			throw new ArgumentException("Dicts count must equal to Ids count");
-		}
-
-		// 成對組裝後交給批內核心(逐對拼 SQL 的細節在核心內)
-		var Pairs = new List<(IStr_Any Dict, TId Id)>(Ids.Count);
-		for(i32 i = 0; i < Ids.Count; i++){
-			Pairs.Add((Dicts[i], Ids[i]));
-		}
-		if(Pairs.Count > 0){
-			await BatOrdUpdByDbDictCore(Ctx, Pairs, Ct);
-		}
-		return new RespUpd();
-	}
-
-	// ■ 流式版 OrdUpdByDbDict:兩條來源流先按位 zip 成對(長度不等即拋,防錯位),
-	// 再交給批原語切塊、逐塊調批內核心——雙流成對的語義在 zip 層保證,原語只管切批。
-	public async Task<IRespBatUpd> OrdUpdByDbDict(
-		IDbFnCtx Ctx
-		,IAsyncEnumerable<TId> Ids
-		,IAsyncEnumerable<IStr_Any> Dicts
-		,CT Ct
-	){
-		await using var DictEtor = Dicts.GetAsyncEnumerator(Ct);
-		await using var IdEtor = Ids.GetAsyncEnumerator(Ct);
-
-		// 惰性 zip:每次同時推進兩個枚舉器,任一流先結束即視為長度不等、拋錯
-		async IAsyncEnumerable<(IStr_Any Dict, TId Id)> Zip(){
-			while(true){
-				var HasDict = await DictEtor.MoveNextAsync();
-				var HasId = await IdEtor.MoveNextAsync();
-				if(HasDict != HasId){
-					throw new ArgumentException("Dicts count must equal to Ids count");
-				}
-				if(!HasDict){
-					break;
-				}
-				yield return (DictEtor.Current, IdEtor.Current);
-			}
-		}
-
-		await SqlFlow.BatchesInOnly(Zip(), (Items, Ct2)=> BatOrdUpdByDbDictCore(Ctx, Items, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new RespUpd();
-	}
-	
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
-		IDbFnCtx Ctx
-		,IAsyncEnumerable<TId> Ids
-		,IAsyncEnumerable<IStr_Any> Dicts
-		,CT Ct
-	){
-		var DbDicts = Dicts.Select(x=>T.ToDbDict(x));
-		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
-	}
-
-	// ■ IList 版 OrdUpdByCodeDict:Ids 與 CodeDicts 成對、整批一次異構 UPDATE(複用 IList 版 OrdUpdByDbDict)。
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
-		IDbFnCtx Ctx
-		,IList<TId> Ids
-		,IList<IStr_Any> CodeDicts
-		,CT Ct
-	){
-		var DbDicts = CodeDicts.Select(x=>T.ToDbDict(x)).ToList();
-		return OrdUpdByDbDict(Ctx, Ids, DbDicts, Ct);
-	}
-
 	// ■ 軟刪 IN 批核心(吃 IList 一批):SQL 走 SqlSplicer 語句部——
 	// UpdateT() 拼 `UPDATE t`、Set(軟刪列, raw值) 拼 `SET DelCol = @DelCol`(軟刪值 = SoftDelCol.FnDelete(null)
 	// 已是 Db 層 raw)、WhereIn(CodeId, Ids) 拼 `WHERE Id IN (@_0,...)`(每 Id 按列 Upper→Raw 綁 One)。
@@ -755,33 +998,6 @@ Func<
 		return NIL;
 	}
 
-	public async Task<ISoftDelInId> SoftDelInId(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
-	){
-		if(T.SoftDelCol is null){
-			throw new Exception("SoftDeleteCol is null");
-		}
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-		return new SoftDelInId();
-	}
-
-	// ■ IList 版 SoftDelInId:函數只管一批——整批一次 IN 軟刪(批大小/切批是調用方/原語的職責)。
-	public async Task<ISoftDelInId> SoftDelInId(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		if(Ids.Count > 0){
-			await BatSoftDelInCore(Ctx, Ids, Ct);
-		}
-		return new SoftDelInId();
-	}
-
-	public async Task<IHardDelInId> HardDelInId(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
-	){
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-		return new HardDelInId();
-	}
-
 	// ■ 硬刪 IN 批核心(吃 IList 一批):DelFromT() 拼 `DELETE FROM t` + WhereIn(...) 拼 `WHERE Id IN (@_0,...)`。
 	private async Task<nil> BatHardDelInCore(IDbFnCtx Ctx, IList<TId> Ids, CT Ct){
 		if(Ids.Count == 0){
@@ -794,33 +1010,6 @@ Func<
 
 		await SqlCmdMkr.Run(Ctx, Sql.Build(), Ct);
 		return NIL;
-	}
-
-	public async Task<IBatSoftDel> OrdSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
-		if(T.SoftDelCol is null){
-			throw new Exception("SoftDeleteCol is null");
-		}
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new BatSoftDel();
-	}
-
-	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new BatHardDel();
-	}
-
-	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		await SqlFlow.BatchesInOnly(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct, batchSize);
-		return new RespBatAddAgg();
-	}
-
-	// ■ IList 版 OrdAddAgg:函數只管一批——整批聚合級聯插入一次完成。
-	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
-		if(Aggs.Count > 0){
-			await BatOrdAddAggCore<TAgg>(Ctx, Aggs, Ct);
-		}
-		return new RespBatAddAgg();
 	}
 
 	// ■ 聚合級聯插入批核心(吃 IList 一批):校驗聚合註冊與訪問器後、根與每個 include 資產各拼一次同構批量 INSERT。
@@ -1090,36 +1279,6 @@ Func<
 		return NIL;
 	}
 
-	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
-		await BatDelAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
-		return new RespHardDelAggInId();
-	}
-
-	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
-		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
-		return new RespSoftDelAggInId();
-	}
-
-	// ■ IList 版:函數只管一批——整批聚合級聯軟刪一次完成(IN 語義)。
-	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IList<TId> Ids, CT Ct) {
-		if(Ids.Count > 0){
-			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, true, Ct);
-		}
-		return new RespSoftDelAggInId();
-	}
-	
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
-	){
-		return BatUpdAggCore(Ctx, Agg, false, Ct);
-	}
-
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
-		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
-	){
-		return BatUpdAggCore(Ctx, Agg, true, Ct);
-	}
-	
 	// ■ 存在批量查批核心(吃 IList 一批):與 BatGetByIdCore 同構(Build+Get1d 位置對齊),每槽 bool。
 	private async Task<IList<bool>> BatExistsByIdCore(
 		IDbFnCtx Ctx, IList<TId> Ids
@@ -1139,34 +1298,6 @@ Func<
 			Ans.Add(Row is not null);
 		}
 		return Ans;
-	}
-
-	// 流式存在查:批原語(IN 段批大小)切塊 → IList 批核心(位置對齊 bool 流)。
-	public IAsyncEnumerable<bool> OrdExistsById(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
-			return await BatExistsByIdCore(Ctx, BatIds, false, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-	}
-
-	public IAsyncEnumerable<bool> OrdExistsByIdWithDel(
-		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
-		,CT Ct
-	){
-		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
-			return await BatExistsByIdCore(Ctx, BatIds, true, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
-	}
-	
-	public async Task<IRespBatUpsert> OrdUpsert(
-		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
-	){
-		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
-		// 批大小用寫入策略;存在判定用等值批量查(位置對齊),不重發 IN。
-		await SqlFlow.BatchesInOnly<TEntity>(Ents, (EntList, Ct2)=> BatOrdUpsertCore(Ctx, EntList, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
-		return new RespBatUpsert();
 	}
 
 	// ■ Upsert 批核心(吃 IList 一批):逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 各一次同構批量寫。
@@ -1197,16 +1328,6 @@ Func<
 			await BatUpdCore(Ctx, toUpdate, Flds, Ct);
 		}
 		return NIL;
-	}
-
-	// ■ IList 版 OrdUpsert:函數只管一批——整批一次完成(批大小/切批是調用方/原語的職責)。
-	public async Task<IRespBatUpsert> OrdUpsert(
-		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
-	){
-		if(Ents.Count > 0){
-			await BatOrdUpsertCore(Ctx, Ents, Ct);
-		}
-		return new RespBatUpsert();
 	}
 
 	// TAgg 上的 DAM 同 OrdAddAgg：本方法要把 typeof(TAgg) 交給 CsRefl 的來源去找聚合的根成員。
@@ -1474,111 +1595,6 @@ Func<
 		}
 	}
 
-	/// IN 語義的 IList 批核心:一條 `IN` 查詢查完整批,無序、忽略不存在的 Id。
-	private async Task<IList<TEntity?>> GetInIdListCore(
-		IDbFnCtx Ctx, IList<TId> Ids, bool WithDel, CT Ct
-	){
-		if(Ids.Count == 0){
-			return [];
-		}
-		var Mk = T.SqlSplicer().Select("*").FromT()
-			.WhereIn(T.CodeIdName, Ids.Select(x=>(obj?)x).ToList());
-		if(!WithDel && T.SoftDelCol is not null){
-			Mk.And(T.SoftDelCol.FnSqlIsNonDel());
-		}
-		var Et = Mk.Build();
-		var Cmd = await SqlCmdMkr.Prepare(Ctx, Et.Sql, Ct);
-		Ctx.AddToDispose(Cmd);
-		var Ans = new List<TEntity?>(Ids.Count);
-		await foreach(var Row in Cmd.RawArgs(Et.Args.ToDict()).AsyE1d(Ct).WithCancellation(Ct)){
-			Ans.Add(T.DbDictToEntity<TEntity>(Row));
-		}
-		return Ans;
-	}
+	#endregion 批核心(私有)
 
-	public async Task<IList<TEntity?>> GetInId(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await GetInIdListCore(Ctx, Ids, false, Ct);
-	}
-
-	public async Task<IList<TEntity?>> GetInIdWithDel(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await GetInIdListCore(Ctx, Ids, true, Ct);
-	}
-
-	public async Task<IList<TEntity?>> OrdGetById(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await BatGetByIdCore(Ctx, Ids, false, Ct);
-	}
-
-	public async Task<IList<bool>> OrdExistsById(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await BatExistsByIdCore(Ctx, Ids, false, Ct);
-	}
-
-	public async Task<IList<bool>> OrdExistsByIdWithDel(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		return await BatExistsByIdCore(Ctx, Ids, true, Ct);
-	}
-
-	public async Task<IBatSoftDel> OrdSoftDelById(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		if(Ids.Count > 0){
-			await BatSoftDelInCore(Ctx, Ids, Ct);
-		}
-		return new BatSoftDel();
-	}
-
-	public async Task<IBatHardDel> OrdHardDelById(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		if(Ids.Count > 0){
-			await BatHardDelInCore(Ctx, Ids, Ct);
-		}
-		return new BatHardDel();
-	}
-
-	public async Task<IHardDelInId> HardDelInId(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		if(Ids.Count > 0){
-			await BatHardDelInCore(Ctx, Ids, Ct);
-		}
-		return new HardDelInId();
-	}
-
-	public async Task<IList<TAgg?>> OrdGetAggById<TAgg>(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	)where TAgg: class{
-		return await HandleOneBatch<TAgg>(Ctx, false, Ids, Ct);
-	}
-
-	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
-		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
-	){
-		if(Ids.Count > 0){
-			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, false, Ct);
-		}
-		return new RespHardDelAggInId();
-	}
-
-	// 聚合更新需要逐個聚合比對子表現狀,故 IList 版仍走既有的流式核心;
-	// 批大小由核心自己按庫策略決定,這裡只把 List 包成流。
-	public async Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
-		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
-	){
-		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), false, Ct);
-	}
-
-	public async Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
-		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
-	){
-		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), true, Ct);
-	}
 }

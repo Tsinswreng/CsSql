@@ -2,20 +2,21 @@ namespace Tsinswreng.CsSql.Postgres;
 using System.Data;
 using Npgsql;
 using Tsinswreng.CsCore;
+using Tsinswreng.CsSql.BaseImpl;
 using IDbFnCtx = Tsinswreng.CsSql.IDbFnCtx;
 
 public partial class PostgresCmdMkr
-	:ISqlCmdMkr
+	:BaseSqlCmdMkr
 	,IMkrTxn
 {
-	public EDbSrcType DbSrcType => EDbSrcType.Postgres;
+	public override EDbSrcType DbSrcType => EDbSrcType.Postgres;
 	public IDbConnMgr DbConnGetter{get;set;}
 	public PostgresCmdMkr(IDbConnMgr DbConnGetter){
 		this.DbConnGetter = DbConnGetter;
 	}
 
 	[Impl]
-	public async Task<ISqlCmd> MkCmd(
+	public override async Task<ISqlCmd> MkCmd(
 		IDbFnCtx? DbFnCtx
 		,str Sql
 		,CT Ct
@@ -42,7 +43,7 @@ public partial class PostgresCmdMkr
 
 	/// Npgsql叵 先Prepare後傳參數。若需效sqlite芝prepare後多次傳異ʹ參數 宜用Batch
 	[Impl]
-	public async Task<ISqlCmd> Prepare(ISqlCmd Cmd, CT Ct){
+	public override async Task<ISqlCmd> Prepare(ISqlCmd Cmd, CT Ct){
 
 		return Cmd;
 		// if(Cmd is not PostgresCmd SqlCmd){
@@ -54,7 +55,7 @@ public partial class PostgresCmdMkr
 
 
 	/// Prepare叵用于CREATE TABLE
-	public async Task<ISqlCmd> Prepare(
+	public override async Task<ISqlCmd> Prepare(
 		IDbFnCtx? DbFnCtx
 		,str Sql
 		, CT Ct
@@ -63,8 +64,7 @@ public partial class PostgresCmdMkr
 		return await Prepare(Cmd, Ct);
 	}
 
-
-	public async Task<ITxn> EnsureTxn(
+	public override async Task<ITxn> EnsureTxn(
 		IDbFnCtx Ctx, CT Ct
 	){
 		// pg中同一交易中 ʹ多條命令 須屬于同一連接。後MkCmd旹所用ʹ連接 亦 優先從Ctx.DbConn中取

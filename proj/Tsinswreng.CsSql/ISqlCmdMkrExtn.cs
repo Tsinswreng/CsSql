@@ -192,7 +192,7 @@ public static class ISqlCmdMkrExtn{
 		){
 			var hasOuterCtx = Ctx is not null;
 			var hasOuterConn = Ctx?.DbConn is not null;
-			Ctx ??= new DbFnCtx();
+			Ctx = await z.FnInitDbFnCtx(Ctx);
 			var hasOuterTxn = Ctx.Txn is not null;
 			if(!hasOuterTxn){
 				await z.EnsureTxn(Ctx, Ct);

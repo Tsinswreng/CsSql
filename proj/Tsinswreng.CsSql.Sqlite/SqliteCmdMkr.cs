@@ -2,11 +2,10 @@ namespace Tsinswreng.CsSql.Sqlite;
 
 using Microsoft.Data.Sqlite;
 using Tsinswreng.CsCore;
-
-
+using Tsinswreng.CsSql.BaseImpl;
 using IDbFnCtx = Tsinswreng.CsSql.IDbFnCtx;
 public partial class SqliteCmdMkr
-	:ISqlCmdMkr
+	:BaseSqlCmdMkr
 	,IMkrTxn
 {
 	// [Obsolete]
@@ -14,7 +13,7 @@ public partial class SqliteCmdMkr
 
 	//#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 	
-	public EDbSrcType DbSrcType => EDbSrcType.Sqlite;
+	public override EDbSrcType DbSrcType => EDbSrcType.Sqlite;
 	public IDbConnMgr DbConnGetter{get;set;}
 
 	public SqliteCmdMkr(IDbConnMgr DbConnGetter){
@@ -26,7 +25,7 @@ public partial class SqliteCmdMkr
 
 	""")]
 	[Impl(typeof(ISqlCmdMkr))]
-	public async Task<ISqlCmd> MkCmd(
+	public override async Task<ISqlCmd> MkCmd(
 		IDbFnCtx? DbFnCtx
 		,str Sql
 		,CT Ct
@@ -55,7 +54,7 @@ public partial class SqliteCmdMkr
 	}
 
 	[Impl(typeof(ISqlCmdMkr))]
-	public async Task<ISqlCmd> Prepare(ISqlCmd Cmd, CT Ct){
+	public override async Task<ISqlCmd> Prepare(ISqlCmd Cmd, CT Ct){
 		if(Cmd is not SqliteCmd SqlCmd){
 			throw new InvalidOperationException("ISqlCmd is not SqliteCmd");
 		}
@@ -79,7 +78,7 @@ public partial class SqliteCmdMkr
 
 	/// Prepare叵用于CREATE TABLE
 	[Impl(typeof(ISqlCmdMkr))]
-	public async Task<ISqlCmd> Prepare(
+	public override async Task<ISqlCmd> Prepare(
 		IDbFnCtx? DbFnCtx
 		,str Sql
 		,CT Ct
@@ -90,7 +89,7 @@ public partial class SqliteCmdMkr
 
 
 	[Impl(typeof(IMkrTxn))]
-	public async Task<ITxn> EnsureTxn(
+	public override async Task<ITxn> EnsureTxn(
 		IDbFnCtx Ctx, CT Ct
 	){
 		if(Ctx.Txn is not null){

@@ -76,9 +76,7 @@ public partial class SqlRepo<
 		,CT Ct
 	){
 		// 流式入口：批原語(IN 段批大小)切塊 → IList 批核心（Build+Get1d 位置對齊）
-		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
-			return await BatGetByIdCore(Ctx, BatIds, false, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return Batched(Ids, (BatIds, Ct2)=> BatGetByIdCore(Ctx, BatIds, false, Ct2), Ct);
 	}
 
 	public async Task<IList<TEntity?>> OrdGetById(
@@ -93,9 +91,7 @@ public partial class SqlRepo<
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
-		return SqlFlow.Batches<TId, TEntity?>(Ids, async(BatIds, Ct2)=>{
-			return await OrdGetByIdWithDel(Ctx, BatIds, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return Batched(Ids, (BatIds, Ct2)=> OrdGetByIdWithDel(Ctx, BatIds, Ct2), Ct);
 	}
 
 	// ■ 批一級形狀(IList 版 OrdGetByIdWithDel,含軟刪):整個 List 一次等值批量查回,位置對齊。
@@ -112,9 +108,7 @@ public partial class SqlRepo<
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
-		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
-			return await BatExistsByIdCore(Ctx, BatIds, false, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return Batched(Ids, (BatIds, Ct2)=> BatExistsByIdCore(Ctx, BatIds, false, Ct2), Ct);
 	}
 
 	public async Task<IList<bool>> OrdExistsById(
@@ -127,9 +121,7 @@ public partial class SqlRepo<
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids
 		,CT Ct
 	){
-		return SqlFlow.Batches<TId, bool>(Ids, async(BatIds, Ct2)=>{
-			return await BatExistsByIdCore(Ctx, BatIds, true, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return Batched(Ids, (BatIds, Ct2)=> BatExistsByIdCore(Ctx, BatIds, true, Ct2), Ct);
 	}
 
 	public async Task<IList<bool>> OrdExistsByIdWithDel(
@@ -161,7 +153,7 @@ public partial class SqlRepo<
 	// ■ 流式版 OrdAdd:批原語(批大小 = 庫默認 sqlite 1 / pg 500)把來源流切塊,
 	// 逐塊交給批內核心(Hence 每個事務內等價於原 BatchCollector 行為:sqlite 一單元一寫、pg 一單元 500 寫)。
 	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
-		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct);
 		return new RespBatInsert();
 	}
 
@@ -179,7 +171,7 @@ public partial class SqlRepo<
 		if(fieldsToUpdate.Count == 0){
 			return new RespUpd();
 		}
-		await SqlFlow.BatchesInOnly(Ents, (BatEnts, Ct2)=> BatUpdCore(Ctx, BatEnts, fieldsToUpdate, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ents, (BatEnts, Ct2)=> BatUpdCore(Ctx, BatEnts, fieldsToUpdate, Ct2), Ct);
 		return new RespUpd();
 	}
 
@@ -198,7 +190,7 @@ public partial class SqlRepo<
 	){
 		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
 		// 批大小用寫入策略;存在判定用等值批量查(位置對齊),不重發 IN。
-		await SqlFlow.BatchesInOnly<TEntity>(Ents, (EntList, Ct2)=> BatOrdUpsertCore(Ctx, EntList, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ents, (EntList, Ct2)=> BatOrdUpsertCore(Ctx, EntList, Ct2), Ct);
 		return new RespBatUpsert();
 	}
 
@@ -262,7 +254,7 @@ public partial class SqlRepo<
 			}
 		}
 
-		await SqlFlow.BatchesInOnly(Zip(), (Items, Ct2)=> BatOrdUpdByDbDictCore(Ctx, Items, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Zip(), (Items, Ct2)=> BatOrdUpdByDbDictCore(Ctx, Items, Ct2), Ct);
 		return new RespUpd();
 	}
 
@@ -295,7 +287,7 @@ public partial class SqlRepo<
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct);
 		return new BatSoftDel();
 	}
 
@@ -309,7 +301,7 @@ public partial class SqlRepo<
 	}
 
 	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct);
 		return new BatHardDel();
 	}
 
@@ -328,7 +320,7 @@ public partial class SqlRepo<
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
 		return new SoftDelInId();
 	}
 
@@ -345,7 +337,7 @@ public partial class SqlRepo<
 	public async Task<IHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	){
-		await SqlFlow.BatchesInOnly(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
 		return new HardDelInId();
 	}
 
@@ -363,8 +355,7 @@ public partial class SqlRepo<
 	#region 聚合
 
 	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
-		await SqlFlow.BatchesInOnly(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct, batchSize);
+		await BatchedWrite(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct);
 		return new RespBatAddAgg();
 	}
 
@@ -595,6 +586,36 @@ Func<
 
 	#endregion Include
 
+	#region 批原語轉接
+
+	/// 寫入批大小。批大小只在庫裏決定，業務代碼不出現數字。
+	private u64 WrBat => SqlFlow.DfltBatchSize(TblMgr.DbSrcType);
+
+	/// IN 查詢段的批大小。與寫入批大小是兩種策略，不可混用。
+	private u64 RdBat => SqlFlow.DfltInBatchSize(TblMgr.DbSrcType);
+
+	/// 讀：把來源流切成批，逐批調用接收 IList 的批核心，結果按批的執行順序攤平。
+	/// 位置語義由回調自己保持（Ord 系查無補 null，In 系只回命中行），本方法只負責切批。
+	private IAsyncEnumerable<TOut> Batched<TIn, TOut>(
+		IAsyncEnumerable<TIn> Src
+		,Func<IList<TIn>, CT, Task<IList<TOut>>> Fn
+		,CT Ct
+	){
+		return SqlFlow.Batches(Src, async(Bat, Ct2)=> (IEnumerable<TOut>)await Fn(Bat, Ct2), Ct, RdBat);
+	}
+
+	/// 寫：把來源流切成批，逐批執行，無輸出。
+	private Task<nil> BatchedWrite<TIn>(
+		IAsyncEnumerable<TIn> Src
+		,Func<IList<TIn>, CT, Task<nil>> Fn
+		,CT Ct
+		,u64? Size = null
+	){
+		return SqlFlow.BatchesInOnly(Src, Fn, Ct, Size ?? WrBat);
+	}
+
+	#endregion 批原語轉接
+
 	#region 批核心(私有)
 
 	private IAsyncEnumerable<TEntity?> GetManyInIdCore(//TODO寫法不對
@@ -621,7 +642,7 @@ Func<
 				Ans.Add(T.DbDictToEntity<TEntity>(Row));
 			}
 			return Ans;
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		}, Ct, RdBat);
 	}
 
 	/// IN 語義的 IList 批核心:一條 `IN` 查詢查完整批,無序、忽略不存在的 Id。
@@ -917,9 +938,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 	)
 		where TAgg: class
 	{
-		return SqlFlow.Batches<TId, TAgg?>(Ids, async(BatIds, Ct2)=>{
-			return await HandleOneBatch<TAgg>(Ctx, WithDel, BatIds, Ct2);
-		}, Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		return Batched(Ids, (BatIds, Ct2)=> HandleOneBatch<TAgg>(Ctx, WithDel, BatIds, Ct2), Ct);
 	}
 
 	// InsertIntoT() 拼 `INSERT INTO t`、Vals 語句部拼 `(列...) VALUES (@列...)` 並為每列註冊 Many binder
@@ -1201,7 +1220,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 		,CT Ct
 	){
 		// 流式版:批原語(IN 段批大小)切塊 → IList 批核心。
-		await SqlFlow.BatchesInOnly(Ids, (BatchIds, Ct2)=> BatDelAggByIdListCore<TAgg>(Ctx, BatchIds, SoftDelete, Ct2), Ct, SqlFlow.DfltInBatchSize(TblMgr.DbSrcType));
+		await BatchedWrite(Ids, (BatchIds, Ct2)=> BatDelAggByIdListCore<TAgg>(Ctx, BatchIds, SoftDelete, Ct2), Ct, RdBat);
 		return NIL;
 	}
 
@@ -1357,7 +1376,6 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 			includeTypeInclude[include.EntityType] = include;
 		}
 
-		u64 batchSize = TblMgr.DbSrcType == EDbSrcType.Sqlite ? 1ul : 500ul;
 		var includeColsByType = new Dictionary<Type, IList<str>>();
 		var includeInsertCmdByTypeCnt = new Dictionary<(Type, u64), ISqlCmd>();
 		var includeDelByFKeyCmdByKey = new Dictionary<(Type, bool, u64), ISqlCmd>();
@@ -1571,7 +1589,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 			}
 
 			return NIL;
-		}, batchSize);
+		}, WrBat);
 
 		await foreach(var one in Agg.WithCancellation(Ct)){
 			await batch.Add(one, Ct);

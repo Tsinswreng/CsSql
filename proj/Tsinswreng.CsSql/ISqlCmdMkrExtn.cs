@@ -119,6 +119,10 @@ public static class ISqlCmdMkrExtn{
 	}
 
 	extension(ISqlCmdMkr z){
+		public Task<IDbFnCtx> InitDbFnCtx(IDbFnCtx? Ctx){
+			return z.FnInitDbFnCtx(Ctx);
+		}
+		
 		[Doc(@$"
 #Sum[Create auto batch helper with provider-based default size]
 #Params([Db function context],[SQL duplicator],[Batch execution delegate],[Batch size, 0 means auto])

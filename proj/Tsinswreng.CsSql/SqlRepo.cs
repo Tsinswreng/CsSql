@@ -185,7 +185,7 @@ public partial class SqlRepo<
 		return new RespUpd();
 	}
 
-	public async Task<IRespBatUpsert> OrdUpsert(
+	public async Task<IRespBatUpsert> OrdSet(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	){
 		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
@@ -195,7 +195,7 @@ public partial class SqlRepo<
 	}
 
 	// ■ IList 版 OrdUpsert:函數只管一批——整批一次完成(批大小/切批是調用方/原語的職責)。
-	public async Task<IRespBatUpsert> OrdUpsert(
+	public async Task<IRespBatUpsert> OrdSet(
 		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
 	){
 		if(Ents.Count > 0){

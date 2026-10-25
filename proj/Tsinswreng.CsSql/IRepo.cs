@@ -11,10 +11,11 @@ Common Repository Interface for SQL Database,
 provides basic CRUD operations.
 
 naming rules:
-- Insert -> Add
-- Select -> Get
-- Update -> Upd  (do not use `Set` because set should map to upsert)
-- Delete -> Del
+- Add -> Insert
+- Get -> Select
+- Upd -> Update
+- Del -> Delete
+- Set -> Update Or Insert (not necessarily use sql `Upsert`)
 
 - NOT support auto increment id for insert operation.
 - support database-generated id: mark the column with `IsDbGenerated`(via `ColMkr.DbGenerated()`),
@@ -143,7 +144,7 @@ public partial interface IRepo<TEntity, TId>{
 	//TODO 自增ID, (id)=>{} 回調可在Ctx中註冊 未實現
 	]
 	""")]
-	public Task<IRespBatInsert> OrdAdd(
+	public Task<IResOrdAdd> OrdAdd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 
@@ -152,7 +153,7 @@ public partial interface IRepo<TEntity, TId>{
 	/// - 函數返回 = 本批全部生效(約束/衝突等異常直接向上拋,不留半批返回的狀態);
 	/// - 空列表是合法的無操作(不發 SQL、直接返回成功)。
 	[Doc(@$"IList 版:`{nameof(OrdAdd)}` 的批一級形狀。本批全部執行完畢才返回(衝突/約束違反即拋)。")]
-	public Task<IRespBatInsert> OrdAdd(
+	public Task<IResOrdAdd> OrdAdd(
 		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
 	);
 
@@ -160,28 +161,28 @@ public partial interface IRepo<TEntity, TId>{
 	so you don't need to provide the entity id independantly.
 	should throw exception if conflict (e.g constraint violation) etc.
 	")]
-	public Task<IRespBatUpd> OrdUpd(
+	public Task<IResOrdUpd> OrdUpd(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 
 	/// IList 版 OrdUpd:把 List 內全部實體一次性拼進同構批量 UPDATE(按主鍵定位、覆蓋主鍵以外全部列)。
 	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作(不發 SQL)。
 	[Doc(@$"IList 版:`{nameof(OrdUpd)}` 的批一級形狀。本批全部執行完畢才返回(衝突/約束違反即拋)。")]
-	public Task<IRespBatUpd> OrdUpd(
+	public Task<IResOrdUpd> OrdUpd(
 		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
 	);
 
 	[Doc(@$"this will not use `UPSERT` sql, but manually insert or update in code.
 	soft deleted rows are included to determine whether the data exists or not.
 	")]
-	public Task<IRespBatUpsert> OrdUpsert(
+	public Task<IResOrdSet> OrdSet(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	);
 
 	/// IList 版 OrdUpsert:一次同構批量完 upsert(逐元素查存在、含軟刪行,分插入/更新兩堆後各走同構批量寫)。
 	/// 語義承諾(與流式版一致):以主鍵是否已存在為準(含軟刪行算存在);本批全部執行完畢才返回。
-	[Doc(@$"IList 版:`{nameof(OrdUpsert)}` 的批一級形狀。存在判定含軟刪行,本批全部執行完畢才返回。")]
-	public Task<IRespBatUpsert> OrdUpsert(
+	[Doc(@$"IList 版:`{nameof(OrdSet)}` 的批一級形狀。存在判定含軟刪行,本批全部執行完畢才返回。")]
+	public Task<IResOrdSet> OrdSet(
 		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
 	);
 
@@ -200,7 +201,7 @@ public partial interface IRepo<TEntity, TId>{
 	```
 	])
 	")]
-	public Task<IRespBatUpd> OrdUpdByDbDict(
+	public Task<IResOrdUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -217,7 +218,7 @@ public partial interface IRepo<TEntity, TId>{
 	/// - 空的 Dict(沒有可更新的列)那一對被跳過,不影響其它對。
 	[Doc(@$"IList 版:`{nameof(OrdUpdByDbDict)}` 的批一級形狀。Ids 與 Dicts 個數須相等。
 	支持異構字典(各行更新的列集可不同)。")]
-	public Task<IRespBatUpd> OrdUpdByDbDict(
+	public Task<IResOrdUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
 	);
 
@@ -236,7 +237,7 @@ public partial interface IRepo<TEntity, TId>{
 	```
 	])
 	")]
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
+	public Task<IResOrdUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -247,7 +248,7 @@ public partial interface IRepo<TEntity, TId>{
 	/// 內部把 CodeDict 轉換成 DbDict 後、複用 {nameof(OrdUpdByDbDict)} 的異構批量語義(同行只更新自己字典裏出現的列)。
 	/// 語義承諾(與流式版一致):Ids 與 Dicts 長度必須相等,否則拋 ArgumentException(不執行任何 UPDATE)。
 	[Doc(@$"IList 版:`{nameof(OrdUpdByCodeDict)}` 的批一級形狀。Ids 與 Dicts 個數須相等、支持異構字典。")]
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
+	public Task<IResOrdUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> CodeDicts, CT Ct
 	);
 
@@ -255,41 +256,41 @@ public partial interface IRepo<TEntity, TId>{
 
 	#region 刪
 
-	public Task<IBatSoftDel> OrdSoftDelById(
+	public Task<IResOrdSoftDel> OrdSoftDelById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(OrdSoftDelById)}`。本批一次軟刪完畢(IN 語義)。")]
-	public Task<IBatSoftDel> OrdSoftDelById(
+	public Task<IResOrdSoftDel> OrdSoftDelById(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
-	public Task<IBatHardDel> OrdHardDelById(
+	public Task<IResOrdHardDel> OrdHardDelById(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(OrdHardDelById)}`。本批一次硬刪完畢(IN 語義)。")]
-	public Task<IBatHardDel> OrdHardDelById(
+	public Task<IResOrdHardDel> OrdHardDelById(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
-	public Task<ISoftDelInId> SoftDelInId(
+	public Task<IResSoftDelInId> SoftDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	/// IList 版 SoftDelInId:按入參 Id 列表一次軟刪(單表 UPDATE 軟刪列)。IN 語義:無序、忽略不存在的 Id、可重複。
 	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
 	[Doc(@$"IList 版:`{nameof(SoftDelInId)}` 的批一級形狀。IN 語義(無序/忽略不存在/可重複),本批一次執行完畢。")]
-	public Task<ISoftDelInId> SoftDelInId(
+	public Task<IResSoftDelInId> SoftDelInId(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
-	public Task<IHardDelInId> HardDelInId(
+	public Task<IResHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(HardDelInId)}` 的批一級形狀。IN 語義,本批一次執行完畢。")]
-	public Task<IHardDelInId> HardDelInId(
+	public Task<IResHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
@@ -297,7 +298,7 @@ public partial interface IRepo<TEntity, TId>{
 
 	#region Agg
 
-	public Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> NewAgg
 		,CT Ct
@@ -306,7 +307,7 @@ public partial interface IRepo<TEntity, TId>{
 	/// IList 版 OrdAddAgg:把 List 內全部聚合一次級聯插入(根 + 全部 include 資產,各自同構批量)。
 	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
 	[Doc(@$"IList 版:`{nameof(OrdAddAgg)}` 的批一級形狀。根與 include 資產各一批同構插入、本批全部執行完畢才返回。")]
-	public Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct
 	);
 
@@ -357,12 +358,12 @@ public partial interface IRepo<TEntity, TId>{
 		as what I passed to `{nameof(OrdHardUpdAgg)}`.
 		`Hard` means hard delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(OrdHardUpdAgg)}`。以傳入的聚合為準覆蓋庫中數據,多餘的子表行硬刪。")]
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
 	);
 
@@ -372,36 +373,36 @@ public partial interface IRepo<TEntity, TId>{
 		as what I passed to `{nameof(OrdSoftUpdAgg)}`.
 		`Soft` means Soft delete one-to-many assets that new agg doesn't have.
 	")]
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(OrdSoftUpdAgg)}`。以傳入的聚合為準覆蓋庫中數據,多餘的子表行軟刪。")]
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
 	);
 
 	[Doc(@$"Hard Delete Both Root and its related assets")]
-	public Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
+	public Task<IResHardDelAggInId> HardDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	[Doc(@$"IList 版:`{nameof(HardDelAggInId)}`。根與 include 資產一起硬刪。")]
-	public Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
+	public Task<IResHardDelAggInId> HardDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
 	[Doc(@$"Soft Delete Both Root and its related assets,
 	if you only need to soft del the root, use {nameof(OrdSoftDelById)} for the root
 	")]
-	public Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(
+	public Task<IResSoftDelAggInId> SoftDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	);
 
 	/// IList 版 SoftDelAggInId:按入參 Id 列表一次軟刪聚合(根 + 全部 include 資產各自 UPDATE 軟刪列)。IN 語義。
 	/// 語義承諾(與流式版一致):本批全部執行完畢才返回;空列表是合法無操作。
 	[Doc(@$"IList 版:`{nameof(SoftDelAggInId)}` 的批一級形狀。根與 include 資產聯動軟刪、本批一次執行完畢。")]
-	public Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(
+	public Task<IResSoftDelAggInId> SoftDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	);
 
@@ -447,56 +448,55 @@ public partial interface IRepo<TEntity, TId>{
 
 
 
-public class IRespBatInsert{
+public class IResOrdAdd{
 	
 }
 
-public class RespBatInsert:IRespBatInsert{}
+public class RespBatInsert:IResOrdAdd{}
 
 
-public class IRespBatUpd{
+public class IResOrdUpd{
 	
 }
 
-public class RespUpd:IRespBatUpd{
+public class RespUpd:IResOrdUpd{
 	
 }
 
-public class IRespBatUpsert{
+public class IResOrdSet{
 	
 }
 
-public class RespBatUpsert: IRespBatUpsert{
+public class RespBatUpsert: IResOrdSet{
 	
 }
 
-public class IBatSoftDel{}
+public class IResOrdSoftDel{}
 
-public class BatSoftDel:IBatSoftDel{}
+public class IResOrdSoftDel:IResOrdSoftDel{}
 
-public class IBatHardDel{}
+public class IResOrdHardDel{}
 
-public class BatHardDel:IBatHardDel{}
+public class ResOrdHardDel:IResOrdHardDel{}
 
-public class IHardDelInId{
+public class IResHardDelInId{
 	
 }
 
-public class HardDelInId:IHardDelInId{}
+public class ResHardDelInId:IResHardDelInId{}
+
+public class IResSoftDelInId{}
+public class ResSoftDelInId:IResSoftDelInId{}
+
+public class IResOrdAddAgg{}
+public class ResOrdAddAgg:IResOrdAddAgg{}
+
+public class IResOrdUpdAgg{}
+public class RespOrdUpdAgg:IResOrdUpdAgg{}
 
 
-public class ISoftDelInId{}
-public class SoftDelInId:ISoftDelInId{}
+public class IResHardDelAggInId{}
+public class ResHardDelAggInId:IResHardDelAggInId{}
 
-public class IRespBatAddAgg{}
-public class RespBatAddAgg:IRespBatAddAgg{}
-
-public class IRespBatUpdAgg{}
-public class RespBatUpdAgg:IRespBatUpdAgg{}
-
-
-public class IRespHardDelAggInId{}
-public class RespHardDelAggInId:IRespHardDelAggInId{}
-
-public class IRespSoftDelAggInId{}
-public class RespSoftDelAggInId:IRespSoftDelAggInId{}
+public class IResSoftDelAggInId{}
+public class ResSoftDelAggInId:IResSoftDelAggInId{}

@@ -19,7 +19,7 @@ naming rules:
 
 - NOT support auto increment id for insert operation.
 - support database-generated id: mark the column with `IsDbGenerated`(via `ColMkr.DbGenerated()`),
-  then INSERT skips that column and generated ids are returned in `IRespBatInsert<TId>.GeneratedIds`.
+  then INSERT skips that column and generated ids are returned in `IResOrdAdd`.
 - throw exception if insert or update fails.
 - update will match the primary key of the entity as benchmark.
 
@@ -473,7 +473,7 @@ public class RespBatUpsert: IResOrdSet{
 
 public class IResOrdSoftDel{}
 
-public class IResOrdSoftDel:IResOrdSoftDel{}
+public class ResOrdSoftDel:IResOrdSoftDel{}
 
 public class IResOrdHardDel{}
 

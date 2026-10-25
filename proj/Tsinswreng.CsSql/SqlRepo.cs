@@ -152,21 +152,21 @@ public partial class SqlRepo<
 
 	// ■ 流式版 OrdAdd:批原語(批大小 = 庫默認 sqlite 1 / pg 500)把來源流切塊,
 	// 逐塊交給批內核心(Hence 每個事務內等價於原 BatchCollector 行為:sqlite 一單元一寫、pg 一單元 500 寫)。
-	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IResOrdAdd> OrdAdd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		await BatchedWrite(Ents, (BatEnts, Ct2)=> BatOrdAddCore(Ctx, BatEnts, Ct2), Ct);
 		return new RespBatInsert();
 	}
 
 	// ■ 批一級形狀(IList 版 OrdAdd):函數邊界 = 批邊界——把傳進來的整個 List 一次同構批量寫完。
 	// 語義承諾:返回 = 本批全部生效(約束衝突直接拋);空列表視為無操作、返回成功。
-	public async Task<IRespBatInsert> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+	public async Task<IResOrdAdd> OrdAdd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
 		if(Ents.Count > 0){
 			await BatOrdAddCore(Ctx, Ents, Ct);
 		}
 		return new RespBatInsert();
 	}
 
-	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
+	public async Task<IResOrdUpd> OrdUpd(IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct){
 		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
 		if(fieldsToUpdate.Count == 0){
 			return new RespUpd();
@@ -176,7 +176,7 @@ public partial class SqlRepo<
 	}
 
 	// ■ IList 版 OrdUpd:函數只管一批——整批一次同構 UPDATE(批大小/切批是調用方/原語的職責)。
-	public async Task<IRespBatUpd> OrdUpd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
+	public async Task<IResOrdUpd> OrdUpd(IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct){
 		var fieldsToUpdate = T.Columns.Keys.Where(x=>x != T.CodeIdName).ToList();
 		if(fieldsToUpdate.Count == 0 || Ents.Count == 0){
 			return new RespUpd();
@@ -185,7 +185,7 @@ public partial class SqlRepo<
 		return new RespUpd();
 	}
 
-	public async Task<IRespBatUpsert> OrdSet(
+	public async Task<IResOrdSet> OrdSet(
 		IDbFnCtx Ctx, IAsyncEnumerable<TEntity> Ents, CT Ct
 	){
 		// Upsert = 批內逐元素查存在(含軟刪行)→ 分插入/更新兩堆 → 分別走同構批量寫。
@@ -195,7 +195,7 @@ public partial class SqlRepo<
 	}
 
 	// ■ IList 版 OrdUpsert:函數只管一批——整批一次完成(批大小/切批是調用方/原語的職責)。
-	public async Task<IRespBatUpsert> OrdSet(
+	public async Task<IResOrdSet> OrdSet(
 		IDbFnCtx Ctx, IList<TEntity> Ents, CT Ct
 	){
 		if(Ents.Count > 0){
@@ -209,7 +209,7 @@ public partial class SqlRepo<
 	// - Ids 與 Dicts 長度不等即拋 ArgumentException(不執行任何 UPDATE);
 	// - 支持異構字典:每對 Dict 的鍵集可不同,各行按自己有的列更新(詳見 BatOrdUpdByDbDictCore 頭註);
 	// - 批大小/切批不在此層(交由原語/調用方)。
-	public async Task<IRespBatUpd> OrdUpdByDbDict(
+	public async Task<IResOrdUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx, IList<TId> Ids, IList<IStr_Any> Dicts, CT Ct
 	){
 		// 入參一致性校驗:兩列表必須逐位對應,否則拒絕執行
@@ -230,7 +230,7 @@ public partial class SqlRepo<
 
 	// ■ 流式版 OrdUpdByDbDict:兩條來源流先按位 zip 成對(長度不等即拋,防錯位),
 	// 再交給批原語切塊、逐塊調批內核心——雙流成對的語義在 zip 層保證,原語只管切批。
-	public async Task<IRespBatUpd> OrdUpdByDbDict(
+	public async Task<IResOrdUpd> OrdUpdByDbDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -258,7 +258,7 @@ public partial class SqlRepo<
 		return new RespUpd();
 	}
 
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
+	public Task<IResOrdUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TId> Ids
 		,IAsyncEnumerable<IStr_Any> Dicts
@@ -269,7 +269,7 @@ public partial class SqlRepo<
 	}
 
 	// ■ IList 版 OrdUpdByCodeDict:Ids 與 CodeDicts 成對、整批一次異構 UPDATE(複用 IList 版 OrdUpdByDbDict)。
-	public Task<IRespBatUpd> OrdUpdByCodeDict(
+	public Task<IResOrdUpd> OrdUpdByCodeDict(
 		IDbFnCtx Ctx
 		,IList<TId> Ids
 		,IList<IStr_Any> CodeDicts
@@ -283,88 +283,88 @@ public partial class SqlRepo<
 
 	#region 刪
 
-	public async Task<IBatSoftDel> OrdSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+	public async Task<IResOrdSoftDel> OrdSoftDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
-		await BatchedWrite(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct);
-		return new BatSoftDel();
+		await BatchedWrite(Ids, (Ids, Ct2)=> ResOrdSoftDelInCore(Ctx, Ids, Ct2), Ct);
+		return new ResOrdSoftDel();
 	}
 
-	public async Task<IBatSoftDel> OrdSoftDelById(
+	public async Task<IResOrdSoftDel> OrdSoftDelById(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count > 0){
-			await BatSoftDelInCore(Ctx, Ids, Ct);
+			await ResOrdSoftDelInCore(Ctx, Ids, Ct);
 		}
-		return new BatSoftDel();
+		return new ResOrdSoftDel();
 	}
 
-	public async Task<IBatHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
-		await BatchedWrite(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct);
-		return new BatHardDel();
+	public async Task<IResOrdHardDel> OrdHardDelById(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct){
+		await BatchedWrite(Ids, (Ids, Ct2)=> ResOrdHardDelInCore(Ctx, Ids, Ct2), Ct);
+		return new ResOrdHardDel();
 	}
 
-	public async Task<IBatHardDel> OrdHardDelById(
+	public async Task<IResOrdHardDel> OrdHardDelById(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count > 0){
-			await BatHardDelInCore(Ctx, Ids, Ct);
+			await ResOrdHardDelInCore(Ctx, Ids, Ct);
 		}
-		return new BatHardDel();
+		return new ResOrdHardDel();
 	}
 
-	public async Task<ISoftDelInId> SoftDelInId(
+	public async Task<IResSoftDelInId> SoftDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	){
 		if(T.SoftDelCol is null){
 			throw new Exception("SoftDeleteCol is null");
 		}
-		await BatchedWrite(Ids, (Ids, Ct2)=> BatSoftDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
-		return new SoftDelInId();
+		await BatchedWrite(Ids, (Ids, Ct2)=> ResOrdSoftDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
+		return new ResSoftDelInId();
 	}
 
 	// ■ IList 版 SoftDelInId:函數只管一批——整批一次 IN 軟刪(批大小/切批是調用方/原語的職責)。
-	public async Task<ISoftDelInId> SoftDelInId(
+	public async Task<IResSoftDelInId> SoftDelInId(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count > 0){
-			await BatSoftDelInCore(Ctx, Ids, Ct);
+			await ResOrdSoftDelInCore(Ctx, Ids, Ct);
 		}
-		return new SoftDelInId();
+		return new ResSoftDelInId();
 	}
 
-	public async Task<IHardDelInId> HardDelInId(
+	public async Task<IResHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct
 	){
-		await BatchedWrite(Ids, (Ids, Ct2)=> BatHardDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
-		return new HardDelInId();
+		await BatchedWrite(Ids, (Ids, Ct2)=> ResOrdHardDelInCore(Ctx, Ids, Ct2), Ct, RdBat);
+		return new ResHardDelInId();
 	}
 
-	public async Task<IHardDelInId> HardDelInId(
+	public async Task<IResHardDelInId> HardDelInId(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count > 0){
-			await BatHardDelInCore(Ctx, Ids, Ct);
+			await ResOrdHardDelInCore(Ctx, Ids, Ct);
 		}
-		return new HardDelInId();
+		return new ResHardDelInId();
 	}
 
 	#endregion 刪
 
 	#region 聚合
 
-	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
+	public async Task<IResOrdAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TAgg> NewAgg, CT Ct) {
 		await BatchedWrite(NewAgg, (BatchAgg, Ct2)=> BatOrdAddAggCore<TAgg>(Ctx, BatchAgg, Ct2), Ct);
-		return new RespBatAddAgg();
+		return new ResOrdAddAgg();
 	}
 
 	// ■ IList 版 OrdAddAgg:函數只管一批——整批聚合級聯插入一次完成。
-	public async Task<IRespBatAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
+	public async Task<IResOrdAddAgg> OrdAddAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(IDbFnCtx Ctx, IList<TAgg> Aggs, CT Ct) {
 		if(Aggs.Count > 0){
 			await BatOrdAddAggCore<TAgg>(Ctx, Aggs, Ct);
 		}
-		return new RespBatAddAgg();
+		return new ResOrdAddAgg();
 	}
 
 	public IAsyncEnumerable<TAgg> GetAllAgg<TAgg>(
@@ -415,7 +415,7 @@ public partial class SqlRepo<
 		return await HandleOneBatch<TAgg>(Ctx, true, Ids, Ct);
 	}
 
-	public Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, false, Ct);
@@ -423,49 +423,49 @@ public partial class SqlRepo<
 
 	// 聚合更新需要逐個聚合比對子表現狀,故 IList 版仍走既有的流式核心;
 	// 批大小由核心自己按庫策略決定,這裡只把 List 包成流。
-	public async Task<IRespBatUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public async Task<IResOrdUpdAgg> OrdHardUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
 	){
 		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), false, Ct);
 	}
 
-	public Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public Task<IResOrdUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IAsyncEnumerable<TAgg> Agg, CT Ct
 	){
 		return BatUpdAggCore(Ctx, Agg, true, Ct);
 	}
 
-	public async Task<IRespBatUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	public async Task<IResOrdUpdAgg> OrdSoftUpdAgg<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx, IList<TAgg> Agg, CT Ct
 	){
 		return await BatUpdAggCore<TAgg>(Ctx, AsyE(Agg, Ct), true, Ct);
 	}
 
-	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+	public async Task<IResHardDelAggInId> HardDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
 		await BatDelAggByIdCore<TAgg>(Ctx, Ids, false, Ct);
-		return new RespHardDelAggInId();
+		return new ResHardDelAggInId();
 	}
 
-	public async Task<IRespHardDelAggInId> HardDelAggInId<TAgg>(
+	public async Task<IResHardDelAggInId> HardDelAggInId<TAgg>(
 		IDbFnCtx Ctx, IList<TId> Ids, CT Ct
 	){
 		if(Ids.Count > 0){
 			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, false, Ct);
 		}
-		return new RespHardDelAggInId();
+		return new ResHardDelAggInId();
 	}
 
-	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
+	public async Task<IResSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IAsyncEnumerable<TId> Ids, CT Ct) {
 		await BatDelAggByIdCore<TAgg>(Ctx, Ids, true, Ct);
-		return new RespSoftDelAggInId();
+		return new ResSoftDelAggInId();
 	}
 
 	// ■ IList 版:函數只管一批——整批聚合級聯軟刪一次完成(IN 語義)。
-	public async Task<IRespSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IList<TId> Ids, CT Ct) {
+	public async Task<IResSoftDelAggInId> SoftDelAggInId<TAgg>(IDbFnCtx Ctx, IList<TId> Ids, CT Ct) {
 		if(Ids.Count > 0){
 			await BatDelAggByIdListCore<TAgg>(Ctx, Ids, true, Ct);
 		}
-		return new RespSoftDelAggInId();
+		return new ResSoftDelAggInId();
 	}
 
 	#endregion 聚合
@@ -1000,7 +1000,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 	// UpdateT() 拼 `UPDATE t`、Set(軟刪列, raw值) 拼 `SET DelCol = @DelCol`(軟刪值 = SoftDelCol.FnDelete(null)
 	// 已是 Db 層 raw)、WhereIn(CodeId, Ids) 拼 `WHERE Id IN (@_0,...)`(每 Id 按列 Upper→Raw 綁 One)。
 	// 函數只管一批 IList(函數邊界 = 批邊界);空批直接返回。
-	private async Task<nil> BatSoftDelInCore(IDbFnCtx Ctx, IList<TId> Ids, CT Ct){
+	private async Task<nil> ResOrdSoftDelInCore(IDbFnCtx Ctx, IList<TId> Ids, CT Ct){
 		if(Ids.Count == 0){
 			return NIL;
 		}
@@ -1018,7 +1018,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 	}
 
 	// ■ 硬刪 IN 批核心(吃 IList 一批):DelFromT() 拼 `DELETE FROM t` + WhereIn(...) 拼 `WHERE Id IN (@_0,...)`。
-	private async Task<nil> BatHardDelInCore(IDbFnCtx Ctx, IList<TId> Ids, CT Ct){
+	private async Task<nil> ResOrdHardDelInCore(IDbFnCtx Ctx, IList<TId> Ids, CT Ct){
 		if(Ids.Count == 0){
 			return NIL;
 		}
@@ -1350,7 +1350,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 	}
 
 	// TAgg 上的 DAM 同 OrdAddAgg：本方法要把 typeof(TAgg) 交給 CsRefl 的來源去找聚合的根成員。
-	private async Task<IRespBatUpdAgg> BatUpdAggCore<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
+	private async Task<IResOrdUpdAgg> BatUpdAggCore<[DAM(ReflTypeInfo.ReflDam)] TAgg>(
 		IDbFnCtx Ctx
 		,IAsyncEnumerable<TAgg> Agg
 		,bool SoftDeleteMissing
@@ -1595,7 +1595,7 @@ AND {TIncludeTbl.QtCol(CodeCol)} IN ({str.Join(",", numParams)}){nonDelSql}
 			await batch.Add(one, Ct);
 		}
 		await batch.End(Ct);
-		return new RespBatUpdAgg();
+		return new RespOrdUpdAgg();
 	}
 
 	// ================================================================
